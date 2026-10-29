@@ -4,7 +4,7 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
 
 FROM deps AS source
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 RAYON_NUM_THREADS=2 NODE_OPTIONS=--max-old-space-size=768
 COPY . .
 
 FROM source AS check
