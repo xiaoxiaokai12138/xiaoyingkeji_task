@@ -57,6 +57,12 @@ public class AssetService {
             throw ex;
         }
     }
+    public AssetRow copyAsResult(AssetRow source) throws IOException {
+        String id = UUID.randomUUID().toString();
+        AssetRow result = new AssetRow(id, source.userId(), "RESULT", id + (source.mimeType().equals("image/png") ? ".png" : ".jpg"), source.mimeType(), source.sizeBytes(), Instant.now());
+        try { Files.copy(path(source), path(result)); return result; }
+        catch (IOException ex) { Files.deleteIfExists(path(result)); throw ex; }
+    }
     private void validateImage(byte[] bytes, String declared) {
         try (ImageInputStream input = ImageIO.createImageInputStream(new java.io.ByteArrayInputStream(bytes))) {
             var readers = ImageIO.getImageReaders(input);

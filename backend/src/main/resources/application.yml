@@ -1,6 +1,13 @@
 spring:
   application:
     name: material-studio
+  task:
+    scheduling:
+      pool:
+        size: 1
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://db:3306/material_studio?connectionTimeZone=UTC}
     username: ${SPRING_DATASOURCE_USERNAME:material_app}
