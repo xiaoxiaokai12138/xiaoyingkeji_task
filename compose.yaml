@@ -1,0 +1,85 @@
+name: yingzuo
+services:
+  db:
+    image: mysql:8.4.11@sha256:0f51e63e537a1f176423fa03ef559aabe6fa4372a53160a44bc7e75da7d15364
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-material_studio}
+      MYSQL_USER: ${MYSQL_USER:-material_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local-demo-app-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-demo-root-change-me}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u$$MYSQL_USER $$MYSQL_DATABASE -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  backend:
+    build: ./backend
+    environment: &backend-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE:-material_studio}?connectionTimeZone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-material_app}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-local-demo-app-change-me}
+      STORAGE_ROOT: /app/data
+      DEMO_MODE: ${DEMO_MODE:-true}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SIMULATION_ASSET_CHECK_MS: ${SIMULATION_ASSET_CHECK_MS:-2000}
+      SIMULATION_GENERATE_MS: ${SIMULATION_GENERATE_MS:-2000}
+      SIMULATION_FINALIZE_MS: ${SIMULATION_FINALIZE_MS:-2000}
+    volumes:
+      - asset-data:/app/data
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  frontend:
+    build: ./frontend
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/system').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  test-db:
+    profiles: [checks]
+    image: mysql:8.4.11@sha256:0f51e63e537a1f176423fa03ef559aabe6fa4372a53160a44bc7e75da7d15364
+    environment:
+      MYSQL_DATABASE: material_test
+      MYSQL_USER: material_test
+      MYSQL_PASSWORD: test-only-password
+      MYSQL_ROOT_PASSWORD: test-root-only-password
+      TZ: UTC
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u$$MYSQL_USER $$MYSQL_DATABASE -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  frontend-check:
+    profiles: [checks]
+    build: { context: ./frontend, target: check }
+  backend-check:
+    profiles: [checks]
+    build: { context: ./backend, target: check }
+    environment:
+      <<: *backend-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://test-db:3306/material_test?connectionTimeZone=UTC
+      SPRING_DATASOURCE_USERNAME: material_test
+      SPRING_DATASOURCE_PASSWORD: test-only-password
+      STORAGE_ROOT: /tmp/studio-test-data
+    depends_on:
+      test-db: { condition: service_healthy }
+volumes:
+  mysql-data:
+  asset-data:

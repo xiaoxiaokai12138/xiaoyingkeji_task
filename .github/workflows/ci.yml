@@ -1,0 +1,25 @@
+name: Checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile checks build frontend-check
+      - run: docker compose --profile checks run --rm frontend-check
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile checks build backend-check
+      - run: docker compose --profile checks run --rm backend-check
+      - if: failure()
+        run: docker compose --profile checks logs --no-color test-db
+      - if: always()
+        run: docker compose --profile checks down
