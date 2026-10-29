@@ -8,3 +8,6 @@ export interface Template {
   acceptedMimeTypes: string[];
   maxFileSizeBytes: number;
 }
+
+export interface User { id: string; demoKey: string; displayName: string; }
+export interface Asset { id: string; previewUrl: string; mimeType: string; sizeBytes: number; }

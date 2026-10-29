@@ -2,7 +2,7 @@
 
 > 文档状态：开发基线草案，随实现和验证持续更新。更新时间：2026-10-29（Asia/Shanghai）。
 >
-> M0、M1 已通过本地容器验收，当前进入 M2 身份与素材上传。后续模块的接口和业务设计仍为拟定契约，不代表已经实现。每个模块完成后更新状态及验证记录。
+> M0～M2 已通过本地容器及浏览器验收，当前进入 M3 Java 异步任务链条。后续模块的接口和业务设计仍为拟定契约，不代表已经实现。每个模块完成后更新状态及验证记录。
 >
 > 自工程实施起使用 `README.md` 作为唯一权威文档；原 `EADME.md` 保留跳转说明。AI 工作流章节由用户填写。
 
@@ -385,7 +385,7 @@ GitHub Actions 在 `push`、`pull_request` 触发，执行前端 lint、TypeScri
 - [x] 编写初版业务设计、技术取舍、模块计划与验收清单。
 - [x] M0 工程、版本锁定与最小容器检查（2026-10-29，北京时间约 20:30）。
 - [x] M1 数据初始化、模板 API 与浏览页面（2026-10-29，北京时间约 20:56）。
-- [ ] M2 演示身份与素材上传。
+- [x] M2 演示身份与素材上传（2026-10-29，北京时间 21:24）。
 - [ ] M3 Java 异步三阶段与失败模拟。
 - [ ] M4 前端多任务、历史与恢复。
 - [ ] M5 视觉、小屏与键盘操作。
@@ -393,7 +393,7 @@ GitHub Actions 在 `push`、`pull_request` 触发，执行前端 lint、TypeScri
 - [ ] M7 可运行交付、正式 README 与回滚说明。
 - [ ] 用户填写 AI 工作流并确认交付材料。
 
-M0 已完成：前端 lint/typecheck/4 个测试/构建、Java 1 个真实 MySQL 集成测试及 verify、前后端镜像构建、三服务健康检查和同源 API 转发通过。M1 已实现模板 API、六份本地封面与列表/详情页面；上传和任务业务尚未实现。GitHub Actions 尚未远程执行。开发目标是可运行、关键链条经验证的版本；不能承诺不存在任何未知缺陷，发现问题应记录、复现、修复并回归。
+M0 已完成：前端 lint/typecheck/4 个测试/构建、Java 1 个真实 MySQL 集成测试及 verify、前后端镜像构建、三服务健康检查和同源 API 转发通过。M1 已实现模板 API、六份本地封面与列表/详情页面；M2 已实现演示会话、持久化素材上传及私有预览；制作任务业务尚未实现。GitHub Actions 尚未远程执行。开发目标是可运行、关键链条经验证的版本；不能承诺不存在任何未知缺陷，发现问题应记录、复现、修复并回归。
 
 ### 9.2 已知设计限制
 
@@ -431,7 +431,7 @@ M0 已完成：前端 lint/typecheck/4 个测试/构建、Java 1 个真实 MySQL
 | --- | --- | --- | --- |
 | 框架与测试库 | 官方项目；具体许可随锁定版本核对 | 基础能力 | 待初始化 |
 | 工程骨架 | 手工配置 Next.js / Spring Boot；Apache Maven Wrapper 3.3.4 生成脚本保留原许可头 | 配置、目录及 Wrapper | M0 已验证 |
-| 模板封面 | 本项目原创 SVG；见 docs/ASSETS.md | 六份本地模板封面 | 已提供，接口测试通过；结果/上传测试样例待后续模块 |
+| 模板封面 | 本项目原创 SVG；见 docs/ASSETS.md | 六份本地模板封面 | 已提供，接口测试通过；上传样例见 demo-inputs/；结果由 M3 实现 |
 
 交付前逐项确认：完整源码；前端锁文件与 Maven 版本配置；数据库迁移和种子；仓库内可读取素材；Dockerfile/Compose/非敏感配置示例；CI；真实有效的构建/测试/启动命令；主要 API；成功/失败/耗时/多任务/刷新/身份演示；已知限制及验证结果；实际投入；用户补齐 AI 工作流；来源说明；正式 `README.md`。源码仓库注明验收 commit，压缩包排除 `.env`、凭据、依赖目录、缓存、构建产物与用户上传数据。最终由用户通过收到题目的原沟通渠道提交。
 
@@ -462,3 +462,15 @@ Java 镜像版本核对：构建镜像 Temurin 21.0.9+10，运行镜像 Temurin 
 - 通过：前端 lint/typecheck/4 测试/build；Java 3 集成测试；空库连续执行 V1/V2；完整 `docker compose up --build -d --wait`；Java 容器重建后模板仍为 6 条；浏览器分类筛选为 2 张卡片、进入双图详情、404 中文反馈。
 - 运行效果：[本地模板库](http://localhost:3000)。浏览器截图：[M1 模板列表](docs/screenshots/M1-templates.jpg)。上传和任务处理属于后续模块，此时不计作已实现。
 - Agent 会话墙钟时间约 25 分钟，包含代码编写、低内存排查、构建等待与浏览器验证；不等同于人工投入。
+### M2：身份与素材上传（2026-10-29，北京时间 20:56～21:08、21:16～21:24）
+
+- 新增 `V3__identity_and_assets.sql`、`identity/`、`asset/`、`IdentityAssetIT`：演示用户、摘要会话、素材记录、上传校验及授权图片读取。
+- 更新异常处理与 Jackson 配置：缺少 multipart 参数返回 400，拒绝未知 JSON 字段，文件过大 413、类型/内容不符 415。
+- 新增 `session.tsx`、`upload-editor.tsx` 和上传测试；更新 Providers/Header/详情/CSS/类型，实现账户弹窗、身份恢复、动态上传位、预览/替换/移除、取消及旧响应隔离。
+- 新增 `demo-inputs/` 三份 PNG/JPEG 样例及原创生成工具 `tools/GenerateDemoImages.java`，更新 `docs/ASSETS.md`。
+- 通过：Java 6 集成测试；前端 lint/typecheck/6 测试/build；浏览器 Alice 登录、双图 PNG/JPEG 上传、移除/重选、后端预览、Bob 切换清空草稿且访问 Alice 文件被拒、刷新恢复 Alice；Java 重建后原私有图片仍可读取为 640×480。
+- 会话：Cookie 名 `studio_session`，HttpOnly/SameSite=Lax/Path=/，默认 24 小时；数据库保存 SHA-256 摘要。生产 HTTPS 设置 `SESSION_COOKIE_SECURE=true`，演示模式可通过 `DEMO_MODE=false` 禁用登录入口。
+- 上传：`POST /api/assets`，multipart 字段 `file`、`templateId`；返回 `{id,previewUrl,mimeType,sizeBytes}`。真实内容校验 JPEG/PNG、每文件 5 MiB、最多 2400 万像素；不能通过客户端 userId 指定归属。预览接口使用当前会话鉴权。
+- 演示：打开模板，选择 Alice，选择 `demo-inputs/sample-1.png` / `sample-2.png` 或 JPEG；切换 Bob 后草稿清空。未提交草稿不做刷新恢复，已上传文件保留，自动清理不在本次范围内。
+- 截图：[M2 双图上传](docs/screenshots/M2-upload.jpg)。提交按钮、任务、历史在 M3/M4 接入；当前不声称已实现。
+- Agent 有记录的实施时段约 20 分钟，中断等待不计入，非用户人工工时。

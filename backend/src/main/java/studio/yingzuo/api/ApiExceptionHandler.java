@@ -10,13 +10,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<?> known(ApiException ex) { return error(ex.status(), ex.code(), ex.getMessage()); }
-    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
+    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
+            MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
     public ResponseEntity<?> invalid(Exception ex) { return error(400, "INVALID_PARAMETERS", "请求参数不完整或格式不正确"); }
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<?> tooLarge(Exception ex) { return error(413, "FILE_TOO_LARGE", "图片超过允许的文件大小"); }

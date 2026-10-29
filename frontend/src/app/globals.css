@@ -64,3 +64,37 @@ p { color: var(--muted); line-height: 1.8; }
 @media (max-width: 1100px) { .template-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } .workspace { grid-template-columns: 340px minmax(0,1fr); } }
 @media (max-width: 760px) { main { padding: 22px 16px; } .site-header { padding: 0 18px; height: 68px; } .site-header nav { gap: 14px; } .demo-badge { display: none; } .intro-stamp { display: none; } .library-intro { margin: 8px 0 30px; } .template-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } .template-art { aspect-ratio: 3/4; } .workspace { display: flex; flex-direction: column; padding: 12px; } .history-panel { min-height: 300px; } .site-footer { flex-direction: column; gap: 6px; } .creation-panel,.history-panel { padding: 20px; } .subtle { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+.account-trigger { color: var(--text); background: #25252a; border: 1px solid #3a3a41; border-radius: 8px; padding: 9px 14px; font-size: 12px; }
+.account-dialog { background: #1b1b20; border: 1px solid #393940; color: var(--text); border-radius: 20px; padding: 30px; max-width: 440px; width: calc(100% - 32px); box-shadow: 0 24px 90px #0009; }
+.account-dialog::backdrop { background: #000a; backdrop-filter: blur(5px); }
+.account-dialog > p { font-size: 12px; }
+.icon-button { background: #27272e; border: 1px solid #393940; border-radius: 8px; width: 32px; height: 32px; color: var(--text); font-size: 20px; }
+.account-list { display: flex; flex-direction: column; gap: 10px; margin: 22px 0; }
+.account-option { background: #27272d; border: 1px solid #393940; border-radius: 12px; padding: 15px; color: var(--text); display: flex; align-items: center; gap: 14px; text-align: left; }
+.account-option.selected { border-color: #9aad63; background: #293123; }
+.avatar { width: 40px; height: 40px; display: grid; place-items: center; background: var(--accent); color: #29331c; border-radius: 50%; font-size: 18px; }
+.account-option small { display: block; color: var(--muted); font-size: 10px; margin-top: 5px; }
+.account-current { color: var(--accent); font-size: 11px; margin-left: auto; }
+.account-logout { width: 100%; }
+.account-note { margin: 18px 0 0; font-size: 10px !important; text-align: center; }
+.error-message { color: var(--danger); }
+.sign-in-notice { background: #202125; padding: 18px; border-radius: 10px; margin-top: 20px; }
+.sign-in-notice p { font-size: 12px; }
+.upload-editor { margin-top: 24px; }
+.upload-editor .section-heading h2 { font-size: 14px; }
+.upload-grid { display: grid; gap: 12px; }
+.upload-slot { border: 1px dashed #414149; border-radius: 10px; padding: 10px; background: #202024; }
+.upload-slot.ready { border-color: #6c7a48; }
+.upload-slot.error { border-color: #94675f; }
+.upload-slot:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.upload-empty { background: transparent; color: var(--text); border: 0; min-height: 130px; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; }
+.upload-empty > span { width: 35px; height: 35px; display: grid; place-items: center; background: #303036; border-radius: 50%; font-size: 22px; }
+.upload-empty strong { font-size: 12px; font-weight: 400; }
+.upload-empty small { font-size: 10px; color: var(--muted); }
+.upload-preview { position: relative; height: 160px; background: #161619; border-radius: 6px; overflow: hidden; }
+.upload-preview img { object-fit: contain; }
+.upload-status { font-size: 11px; line-height: 1.7; text-align: center; color: var(--accent); }
+.upload-status:not(:empty) { margin-top: 8px; }
+.upload-actions { display: flex; gap: 20px; justify-content: center; margin-top: 8px; }
+.text-button { border: none; background: transparent; color: #d5d5da; padding: 4px; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.upload-help { font-size: 10px; margin: 10px 0 0; }

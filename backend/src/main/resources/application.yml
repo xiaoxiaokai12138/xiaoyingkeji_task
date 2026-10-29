@@ -13,6 +13,8 @@ spring:
       max-request-size: 6MB
   jackson:
     time-zone: UTC
+    deserialization:
+      fail-on-unknown-properties: true
 server:
   port: 8080
   shutdown: graceful
