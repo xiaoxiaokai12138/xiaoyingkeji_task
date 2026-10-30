@@ -4,7 +4,7 @@
 
 **制作不调用真实 AI。** 模拟结果是第一张上传图片的独立持久化副本；通过可调耗时和指定阶段失败，演示完整异步业务。原题以三天描述背景，用户已确认不按天限时，以实现和验证为准。
 
-文档更新时间：2026-10-30（Asia/Shanghai）。M0～M7 工程实施与本地验收已完成；最终对外提交前仍需用户填写 AI 工作流。`EADME.md` 为本文件的跳转入口。
+文档更新时间：2026-10-30（wangqingkai/hfut）。M0～M7 工程实施与本地验收已完成；最终对外提交前仍需用户填写 AI 工作流。`EADME.md` 为本文件的跳转入口。
 
 ![模板列表](docs/screenshots/M5-desktop.jpg)
 
@@ -274,4 +274,4 @@ R-02～R-10 的核心业务链条已经实现，R-11 已完成基础视觉/小�
 
 交付包含前后端源码、npm 锁文件、POM/Wrapper、V1～V4 迁移和种子、本地素材、Dockerfile/Compose、配置示例、CI 与验证说明。源码包排除 `.env`、数据库/上传数据、依赖目录、缓存和构建产物。源码已按用户授权推送至 [GitHub 仓库](https://github.com/xiaoxiaokai12138/xiaoyingkeji_task)，分支为 `master`；没有部署公网网站。最终由用户通过收到题目的沟通渠道提交，AI 工作流章节需用户补齐。
 
-本地交付包：`delivery/yingzuo-source-20261030.zip`；当前验收标记：`acceptance-20261030-v2`。v2 仅补充远程仓库与 CI 状态说明，业务源码与已验收的 v1 一致，v1 标记保留。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v2` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户补充 AI 工作流或后续修改后，应重新提交并生成新的验收版本与源码包。
+本地交付包：`delivery/yingzuo-source-20261030.zip`；当前验收标记：`acceptance-20261030-v3`。v2 补充远程交付说明，v3 按用户要求将文档日期旁的标注改为 `wangqingkai/hfut`；业务源码与已验收的 v1 一致，历史标记保留。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v3` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户补充 AI 工作流或后续修改后，应重新提交并生成新的验收版本与源码包。

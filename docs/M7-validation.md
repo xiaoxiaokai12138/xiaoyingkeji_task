@@ -1,6 +1,6 @@
 # M7 交付验收记录
 
-日期：2026-10-30（Asia/Shanghai）。
+日期：2026-10-30（wangqingkai/hfut）。
 
 ## 干净源码复现
 
@@ -44,3 +44,5 @@ docker compose -p yingzuo-acceptance-20261030 --profile checks run --rm api-chec
 用户提供仓库并明确授权后，项目推送至 `https://github.com/xiaoxiaokai12138/xiaoyingkeji_task` 的 `master` 分支，同时同步 v1 验收标记。当前 v2 仅更新 README 的仓库地址、CI 状态说明和本补记，未修改业务源码、配置或测试；源码包及验收标记同步更新，v1 历史保留。
 
 GitHub 未认证 API 核查遇到限流，尚未确认远程 CI 结果，不据此推断成功或失败；请查看仓库 Actions 页面。此前“没有远程仓库”等文字是初次本地交付时点记录，以本补记为准。
+
+v3 按用户要求将 6 份文档日期旁的标注统一替换为 `wangqingkai/hfut`，同步源码包和验收标记；未修改应用代码或运行时配置，因此不重复执行应用测试。
