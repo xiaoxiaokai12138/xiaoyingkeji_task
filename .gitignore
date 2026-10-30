@@ -11,3 +11,5 @@ target/
 .vscode/
 data/
 *.tsbuildinfo
+*.runtime.json
+delivery/

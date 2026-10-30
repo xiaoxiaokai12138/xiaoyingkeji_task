@@ -23,3 +23,22 @@ jobs:
         run: docker compose --profile checks logs --no-color test-db
       - if: always()
         run: docker compose --profile checks down
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build backend
+      - run: docker compose build frontend
+      - run: docker compose up -d --wait
+      - run: docker compose --profile checks run --rm api-check
+      - name: Verify process interruption and queue recovery
+        run: |
+          docker compose --profile checks run --rm --no-deps api-check node tools/verify-restart.mjs prepare > docs/restart.runtime.json
+          docker compose kill -s SIGKILL backend
+          docker compose up -d --wait backend
+          docker compose --profile checks run --rm --no-deps api-check node tools/verify-restart.mjs verify
+      - if: failure()
+        run: docker compose logs --no-color --tail=150
+      - if: always()
+        run: docker compose --profile checks down
