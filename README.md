@@ -209,7 +209,7 @@ docker compose --profile checks run --rm api-check
 - Java 检查：Maven 3.9.11 的 `mvn -B verify`，先单元测试，再真实 MySQL 集成测试与打包；数据库不可达会失败，不静默跳过。另附固定版本 Maven Wrapper。
 - 正式镜像构建阶段 Java 使用 `package -DskipTests`，因为测试需在独立数据库检查服务中执行；CI 的 backend job 明确执行 verify，不能只把正式镜像构建当作测试通过。
 - 容器内应用执行入口为 Next standalone `node server.js` 和 Java `java -jar /app/app.jar`，Compose 负责连接与健康检查。宿主机不需要执行这两个命令。
-- CI 在 push/PR 执行前端检查、Java 检查、完整集成及进程中断演练三个 job。没有要求自动部署。**本地等价命令已验证，GitHub Actions 尚未远程运行。**
+- CI 在 push/PR 执行前端检查、Java 检查、完整集成及进程中断演练三个 job。没有要求自动部署。**本地等价命令已验证，项目现已推送 GitHub；远程执行结果尚未确认，请以 [Actions 页面](https://github.com/xiaoxiaokai12138/xiaoyingkeji_task/actions) 为准。**
 
 最近验证（2026-10-30）：前端 17 项测试 + lint/typecheck/build 通过；Java 5 项单元 + 13 项 MySQL 集成测试，0 失败/错误/跳过；真实 API 链条、SIGKILL 收敛、排队恢复、容器重建后文件和历史持久化通过。浏览器 320/390 像素无横向溢出，键盘上传/提交及弹窗焦点恢复通过。图片失败反馈有受控测试；浏览器断网尝试因资源缓存未触发该场景，不将其计为实际断网验证通过。
 
@@ -230,7 +230,7 @@ docker compose --profile checks run --rm api-check
 
 各模块修改文件、效果和验证明细：[M0](docs/M0-validation.md)、[M1](docs/M1-validation.md)、[M2](docs/M2-validation.md)、[M3](docs/M3-validation.md)、[M4](docs/M4-validation.md)、[M5](docs/M5-validation.md)、[M6](docs/M6-validation.md)、[M7](docs/M7-validation.md)。历史记录保留当时的待办表述，当前状态以本文和后续验收补记为准。
 
-R-02～R-10 的核心业务链条已经实现，R-11 已完成基础视觉/小屏/键盘检查；R-12 已提供测试和 CI，远程流水线未运行；R-13/R-14 已提供源码和容器交付，干净源码构建、空库初始化和完整链条通过，AI 工作流待用户补齐。参考图中的积分、垃圾桶、重做、密码重置、账单和订阅属于题外功能，不扩展实现。
+R-02～R-10 的核心业务链条已经实现，R-11 已完成基础视觉/小屏/键盘检查；R-12 已提供测试和 CI，远程结果尚未确认；R-13/R-14 已提供源码和容器交付，干净源码构建、空库初始化和完整链条通过，AI 工作流待用户补齐。参考图中的积分、垃圾桶、重做、密码重置、账单和订阅属于题外功能，不扩展实现。
 
 ## 10. 已知限制与部署回滚
 
@@ -272,6 +272,6 @@ R-02～R-10 的核心业务链条已经实现，R-11 已完成基础视觉/小�
 
 项目骨架为手工配置，未复用完整业务脚手架。Apache Maven Wrapper 3.3.4 生成脚本保留上游许可头；Next/React/Spring/MyBatis 等开源依赖按锁文件/POM 使用。六份 SVG 封面及三份上传示例为项目原创，未复制参考图照片或账户内容，不依赖付费或公司内部服务，详见 [素材来源](docs/ASSETS.md)。
 
-交付包含前后端源码、npm 锁文件、POM/Wrapper、V1～V4 迁移和种子、本地素材、Dockerfile/Compose、配置示例、CI 与验证说明。源码包排除 `.env`、数据库/上传数据、依赖目录、缓存和构建产物。仓库暂未配置远程地址；接受本地目录或源码压缩包交付，无公网地址要求。最终由用户通过收到题目的沟通渠道提交，AI 工作流章节需用户补齐。
+交付包含前后端源码、npm 锁文件、POM/Wrapper、V1～V4 迁移和种子、本地素材、Dockerfile/Compose、配置示例、CI 与验证说明。源码包排除 `.env`、数据库/上传数据、依赖目录、缓存和构建产物。源码已按用户授权推送至 [GitHub 仓库](https://github.com/xiaoxiaokai12138/xiaoyingkeji_task)，分支为 `master`；没有部署公网网站。最终由用户通过收到题目的沟通渠道提交，AI 工作流章节需用户补齐。
 
-本地交付包：`delivery/yingzuo-source-20261030.zip`；验收标记：`acceptance-20261030-v1`。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v1` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户补充 AI 工作流或后续修改后，应重新提交并生成新的验收版本与源码包。
+本地交付包：`delivery/yingzuo-source-20261030.zip`；当前验收标记：`acceptance-20261030-v2`。v2 仅补充远程仓库与 CI 状态说明，业务源码与已验收的 v1 一致，v1 标记保留。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v2` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户补充 AI 工作流或后续修改后，应重新提交并生成新的验收版本与源码包。

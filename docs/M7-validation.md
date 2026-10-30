@@ -38,3 +38,9 @@ docker compose -p yingzuo-acceptance-20261030 --profile checks run --rm api-chec
 - 没有公网部署，不要求公网地址。实际应用边界和工具链提示见 README。
 
 可确认的本次工具/文件记录覆盖约 11:14～11:40，更早的引擎启动未单独统计，打包另有少量收尾时间；Agent 会话包括生成、构建和等待，不是用户人工工时。
+
+## 远程交付补记
+
+用户提供仓库并明确授权后，项目推送至 `https://github.com/xiaoxiaokai12138/xiaoyingkeji_task` 的 `master` 分支，同时同步 v1 验收标记。当前 v2 仅更新 README 的仓库地址、CI 状态说明和本补记，未修改业务源码、配置或测试；源码包及验收标记同步更新，v1 历史保留。
+
+GitHub 未认证 API 核查遇到限流，尚未确认远程 CI 结果，不据此推断成功或失败；请查看仓库 Actions 页面。此前“没有远程仓库”等文字是初次本地交付时点记录，以本补记为准。
