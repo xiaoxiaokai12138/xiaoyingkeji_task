@@ -1,549 +1,277 @@
-# 素材制作网站：需求、技术方案与开发计划
+# 映作 · 素材工作室
 
-> 文档状态：开发与验收进行中，随实现和验证持续更新。进展核对时间：2026-10-30 11:01（Asia/Shanghai）。
->
-> M0～M4 已通过各模块本地验收；已按用户指示恢复开发，当前推进 M5 可用性检查，随后执行 M6 可靠性回归及 M7 交付整理。各项证据及剩余工作见第 9、12 节。
->
-> 自工程实施起使用 `README.md` 作为唯一权威文档；原 `EADME.md` 保留跳转说明。AI 工作流章节由用户填写。
+独立运行的素材制作演示网站：浏览模板 → 上传图片 → 提交任务 → Java 后台处理 → 查看个人历史与结果。界面为中文，采用参考图的暗色卡片、分类列表及左侧制作/右侧记录布局，小屏上下排列。
 
-## 1. 任务背景、目标与范围
+**制作不调用真实 AI。** 模拟结果是第一张上传图片的独立持久化副本；通过可调耗时和指定阶段失败，演示完整异步业务。原题以三天描述背景，用户已确认不按天限时，以实现和验证为准。
 
-本项目是一项 AI Coding 开发任务，投入包括需求与方案、开发、验证、问题修复和交付整理。原题以三天描述任务背景，用户已明确无需按该时间节奏安排，以完成项目要求和验证为准。目标是交付一个可独立运行的素材制作网站，供用户浏览模板、上传图片、创建制作任务，在后台处理期间继续使用网站，并查看个人历史与结果。
+文档更新时间：2026-10-30（Asia/Shanghai）。M0～M7 工程实施与本地验收已完成；最终对外提交前仍需用户填写 AI 工作流。`EADME.md` 为本文件的跳转入口。
 
-已确认的实施决定：
+![模板列表](docs/screenshots/M5-desktop.jpg)
 
-- 不设三天开发窗口，按模块依赖和验收条件推进，不因原题时间描述缩减必要功能或验证。
-- 用户身份采用可切换的 Alice / Bob 演示账户与 Java 服务端会话，用户已接受该方案。
-- 网站界面使用中文，包括导航、操作按钮、任务阶段、错误提示、空态及可访问性标签；技术标识和 API 枚举保留英文。
+## 1. 启动项目
 
-制作过程不调用真实 AI 服务。通过模板种子、仓库内示例图片及可控制耗时和失败阶段的模拟生成器，完成业务闭环。评价重点是 Java 多步骤异步处理、前端异步状态管理、素材交互、个人记录与可复现的工程交付。
+需要已启动的 Docker Engine / Docker Desktop（Linux 容器）及 Compose v2。宿主机不需要安装 Node、Java、Maven 或 MySQL。首次构建需要能访问 npm、Maven Central 和基础镜像仓库；已固定依赖版本及镜像 digest。建议给 Docker 至少 4 GiB 可用内存，构建检查串行执行；实际需求受同时运行的其他容器影响。
 
-核心流程：
+在源码根目录执行：
 
-```text
-选择演示用户 → 浏览/筛选模板 → 查看详情 → 上传规定数量的图片
-→ 提交并快速获得任务 ID → Java 后台执行三个阶段
-→ 前端跟踪等待/处理状态 → 展示成功结果或失败原因 → 刷新恢复个人记录
+```sh
+docker compose up --build -d --wait
+docker compose ps
 ```
 
-范围约束：
+打开 <http://localhost:3000>，选择 Alice 或 Bob，即可开始制作。数据库首次启动后由 Java 的 Flyway 自动执行 V1～V4 结构和种子迁移，无需手动导入 SQL。
 
-- 前端必须使用 Next.js App Router、React、TypeScript。
-- 模板、素材、任务和个人记录业务必须由 Java / Spring Boot / MyBatis 提供，任务与历史持久化至 MySQL。
-- 任务受理后不依赖页面存活；状态查询不推进任务；终态不得被后续查询改回处理中。
-- 桌面端实现主要界面，小屏能够操作；提供加载、空态、失败、焦点与可理解的标签。
-- 不扩展模板管理后台、真实 AI、计费、订阅、视频、结果下载、任务删除、失败任务重做、完整密码账户体系。
-- 不以引入更多基础设施作为质量指标；优先完成可靠、可解释、可验证的闭环。
+默认配置是明确的本地演示值，**不含真实凭据**；无需 `.env` 也可以启动。需要修改端口、密码或耗时时，先复制 `.env.example` 为 `.env`（PowerShell：`Copy-Item .env.example .env`；POSIX shell：`cp .env.example .env`），编辑后重新启动。已有 MySQL 卷中的账户密码不会随 `.env` 修改自动变更，首次建库应先确定配置。
 
-### 1.1 页面参考与需求映射
+本项目 Compose 名称为 `yingzuo`，默认仅开放 `127.0.0.1:3000`，Java 和 MySQL 不开放宿主机端口。容器内部链路：
 
-| 页面/区域 | 需求 | 拟定布局与验收点 |
+```text
+浏览器 → Next.js :3000 /api/** → Java backend:8080 → MySQL db:3306
+                                           └→ /app/data 文件卷
+```
+
+Next.js 只转发请求，Java 负责业务、会话、文件访问及持久化。`mysql-data` 保存数据库，`asset-data` 保存上传和结果。重建容器会保留这两个卷；普通停止用 `docker compose stop`，重新启动用 `docker compose up -d --wait`。不要在需要保留演示记录时执行 `down --volumes`。
+
+## 2. 技术版本与取舍
+
+| 层次 | 实际锁定版本 / 方案 | 取舍 |
 | --- | --- | --- |
-| 模板列表 | R-02、R-11；UI-01 | 深色背景、分类标签、封面卡片网格；Java 数据源；切换分类、进入详情、加载/空态/请求失败 |
-| 详情与上传 | R-03、R-11；UI-02 | 左侧标题、描述、示例、动态上传位与制作按钮；选择/预览/替换/移除；校验与上传反馈 |
-| 受理与执行 | R-04；UI-03 | 提交建档后返回 ID，Java 后台执行，关闭页面不影响任务 |
-| 阶段与失败模拟 | R-05、R-06；UI-03 | 三阶段独立可观察、状态持久化、指定阶段失败与耗时调整 |
-| 状态反馈与多任务 | R-07、R-08；UI-03 | 详情右侧个人任务卡片；区分请求异常与任务失败，按任务跟踪并清理订阅 |
-| 历史与刷新恢复 | R-09、R-11；UI-03 | 展示时间、状态、结果或原因；刷新恢复，另提供全部历史入口 |
-| 用户入口 | R-10 | 参考账户弹窗风格，提供当前演示身份和切换入口；切换后加载对应个人记录 |
-| 工程与交付 | R-12、R-13、R-14 | 关键测试、CI、完整源码与说明、Compose 容器运行 |
+| 前端运行时 | Node 22.23.4 / npm 10.9.9 | Docker 固定镜像，npm ci + 锁文件，严格 peer 校验 |
+| 前端 | Next.js 16.4.3 App Router、React/DOM 19.3.1、TypeScript 5.9.3 | 遵守指定栈；严格类型检查、lint 与构建分别执行 |
+| 样式 | 全局 CSS 与设计变量 | 无 UI 框架成本，语义按钮、原生 dialog、焦点和响应式由项目实现 |
+| 服务端状态 | TanStack Query 5.105.0 | 缓存按用户/任务隔离；短期上传草稿保存在 React 组件，不引入 Redux |
+| 前端检查 | ESLint 9.39.5、eslint-config-next 16.4.3；Vitest 5.0.5、RTL 16.3.3、MSW 3.0.3、jsdom 30.1.3 | 受控响应验证并发及请求异常；不要求端到端框架 |
+| Java | Java 21；构建 Temurin 21.0.9+10，运行 21.0.12.1+1 | 均为 Java 21；项目不使用宿主机 Java 11 |
+| 后端 | Spring Boot 3.5.16、MyBatis Starter 3.0.5 / Core 3.5.19、Maven 3.9.11 | Starter 3.0 系列适配 Boot 3.5，避免混用 Boot 4 系列依赖 |
+| 数据库 | MySQL 8.4.11、Connector/J 9.7.0、Flyway 11.7.2 | 真正的 MySQL 集成验证；迁移脚本随源码版本管理 |
+| Java 测试 | JUnit Jupiter 5.12.2、Mockito、Failsafe 3.5.6 | 步骤顺序/失败中断单元测试 + MySQL 接口集成测试 |
+| 异步 | 单实例 Java 串行工作器 + MySQL 队列 | 请求只建档；关闭页面不影响执行；无 Redis/MQ 成本，吞吐和扩容能力有限 |
+| 通知 | 未结束任务约 2 秒轮询 | 简单可恢复，无 SSE/WebSocket 连接维护；有短暂状态延迟 |
+| 文件 | 本地 Docker 命名卷，私有 HTTP 预览 | 无付费服务；需要数据库和文件配套备份，不能直接多副本共享 |
+| 交付 | Compose、多阶段镜像、GitHub Actions | 安装、测试、构建、应用均可在容器隔离环境运行 |
 
-参考图中的积分、垃圾桶、重做、密码重置、账单和订阅不形成额外需求。素材、品牌和文案可替换，保留主要布局、层级、间距和反馈即可。参考图后续整理至 `docs/references/`，不依赖用户机器上的临时文件路径。
+依赖兼容性以锁文件、POM、镜像及实际容器检查为证据。官方依据：[Next.js 16](https://nextjs.org/docs/app/guides/upgrading/version-16)、[Boot 3.5](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[MyBatis Starter](https://github.com/mybatis/spring-boot-starter)、[TanStack Query](https://tanstack.com/query/v5)。
 
-## 2. 技术选择与取舍
+已知工具链提示：ESLint 9 已停止上游维护，但所选 React/import/a11y 插件 peer 范围不接受 ESLint 10，因此固定兼容版本；Flyway 对 MySQL 8.4 给出“新于已测试版本”提示（[上游问题](https://github.com/flyway/flyway/issues/4168)），真实迁移和集成测试通过；Mockito 在 Java 21 有动态 agent 提示。没有通过忽略测试失败掩盖这些提示。
 
-以下为选型基线，非已经安装的版本清单。M0 初始化时核验可获取的稳定补丁及安全公告，锁定精确版本，记录实际构建验证结果；不得将 `latest`、浮动镜像标签作为最终版本记录。
+## 3. 项目结构与配置
 
-| 层次 | 选型基线 | 原因与代价 |
-| --- | --- | --- |
-| 前端运行时 | Node.js 22 LTS、npm | 与 Next.js 16 的 Node.js 最低要求相容；npm 减少额外工具，使用 `package-lock.json` 和 `npm ci` 固定依赖 |
-| 前端框架 | Next.js 16.4.3 App Router、React / React DOM 19.3.1、TypeScript 5.9.3 | 遵守指定栈；React 与类型定义成组核验；启用严格类型检查，不把构建当作 lint 的替代 |
-| 样式 | CSS Modules + 全局设计变量 | 足够实现暗色卡片与响应式布局，减少 UI 框架依赖；按钮、对话框及焦点行为需要自行做好 |
-| 服务端状态 | TanStack Query 5.x | 管理查询缓存、任务轮询、取消及请求错误；上传位和弹窗等短期状态保留在组件/reducer，不再引入 Redux |
-| Java | Eclipse Temurin JDK 21 LTS | 成熟工具链，处于 Spring Boot 3.5 的 Java 兼容范围内 |
-| Java 框架 | Spring Boot 3.5.x、MyBatis Spring Boot Starter 3.0.x、Maven 3.9.x | MyBatis Starter 3.0 系列对应 Boot 3.2～3.5；避免混入面向 Boot 4 的 Starter；依赖优先由 Boot BOM 管理 |
-| 数据库 | MySQL 8.4 LTS、Connector/J 由 BOM 管理 | 满足持久化要求；使用 InnoDB、utf8mb4、UTC 时间；需要单独的数据卷和健康检查 |
-| 数据迁移 | Flyway，配套 MySQL 支持模块 | 结构和种子可版本化、可重复部署；模块与版本需匹配 Boot 依赖管理，迁移脚本执行后不可随意改写 |
-| 异步执行 | Java 单实例后台串行工作器 + MySQL 任务队列 | 请求只建档；后台按序处理，天然演示排队；无消息队列/Redis 成本，吞吐有限且不承诺多副本调度 |
-| 状态通知 | 约 2 秒轮询，仅跟踪未终结任务 | 实现和容器代理简单；有少量查询延迟；暂不引入 SSE/WebSocket 的连接恢复复杂度 |
-| 文件存储 | 后端本地持久化目录 / Docker 命名卷 | 无付费服务、便于离线演示；数据库和文件需要配套备份，不适合直接扩展到多实例 |
-| 测试 | JUnit 5 + Mockito + MySQL 集成测试；Vitest + React Testing Library + MSW | 后端验证业务顺序及真实 SQL，前端以受控响应/时钟验证并发状态与请求异常；精确工具版本在 M0 锁定 |
-| 交付 | Docker Compose v2、多阶段 Dockerfile、GitHub Actions | 一条命令启动前后端和数据库；CI 使用容器执行检查；需要构建时能拉取依赖和基础镜像 |
+```text
+frontend/                       Next App Router、组件、API/查询逻辑与测试
+backend/src/main/java/studio/yingzuo/
+  template/ identity/ asset/    模板、演示会话与素材
+  task/                        受理、短事务、流水线、独立工作器
+backend/src/main/resources/
+  db/migration/V1～V4           MySQL 结构及初始化数据
+  demo/*.svg                   六份本地模板封面
+backend/src/test/              流水线单元与真实 MySQL 集成测试
+demo-inputs/                   可直接上传的 PNG / JPEG 示例
+tools/                        API 验证、强制重启验证、示例图片生成源码
+docs/                         M0～M7 验证记录、素材来源、部署回滚说明
+.github/workflows/ci.yml       push / pull_request 容器流水线
+compose.yaml / .env.example    启动、检查、非敏感配置
+```
 
-前端与 Java 之间采用同源路径转发：浏览器请求 Next.js 的 `/api/**`，由 Next.js rewrite 转发至 Java。Java 负责校验、会话、业务执行与全部业务持久化。Next.js 不维护第二套任务状态或数据库。这样浏览器只需访问一个站点，避免跨域 Cookie 配置；需验证代理对 multipart、Cookie 和文件响应的转发。
-
-兼容性依据（方案核对，不代表本工程已经构建通过）：
-
-- [Next.js 16 升级与运行时要求](https://nextjs.org/docs/app/guides/upgrading/version-16)：Node.js 至少 20.9、TypeScript 至少 5.1；lint 需独立运行。
-- [Spring Boot 3.5 系统要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)：Java 21 位于其支持范围。
-- [MyBatis Starter 版本对应关系](https://github.com/mybatis/spring-boot-starter/blob/master/README.md)：3.0.x 对应 Java 17+ 与 Boot 3.2～3.5。
-- [MySQL 8.4 官方手册](https://dev.mysql.com/doc/refman/8.4/en/)、[Node.js 发布周期](https://github.com/nodejs/Release)、[TanStack Query 文档](https://tanstack.com/query/v5)。
-
-M0 已锁定并经过容器安装、测试及构建的精确版本：
-
-| 工具/依赖 | 版本 |
+| 配置项 | 默认值 / 使用范围 |
 | --- | --- |
-| Node.js / npm | 22.23.4 / 10.9.9 |
-| Next.js / React / React DOM | 16.4.3 / 19.3.1 / 19.3.1 |
-| TypeScript / ESLint / eslint-config-next | 5.9.3 / 9.39.5 / 16.4.3 |
-| TanStack Query | 5.105.0 |
-| Vitest / React Testing Library / MSW / jsdom | 5.0.5 / 16.3.3 / 3.0.3 / 30.1.3 |
-| Spring Boot / MyBatis Starter | 3.5.16 / 3.0.5 |
-| Java / Maven / MySQL | 21.0.9+10（Temurin 构建镜像）/ 3.9.11 / 8.4.11 |
+| `WEB_PORT` / `WEB_BIND_ADDRESS` | `3000` / `127.0.0.1`，宿主机入口 |
+| `JAVA_API_ORIGIN` | `http://backend:8080`，**Next 镜像构建期** rewrite 地址；修改后要重新 build frontend |
+| `MYSQL_DATABASE` / `MYSQL_USER` | `material_studio` / `material_app`，MySQL 首次初始化及 Java 连接 |
+| `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` | `.env.example` 中明确的本地演示占位值；Java 仅使用应用账户 |
+| `DEMO_MODE` | `true`；演示账户登录及逐任务模拟参数覆盖开关 |
+| `SESSION_TTL_SECONDS` | `86400`，会话有效秒数；配置正整数 |
+| `SESSION_COOKIE_SECURE` | `false` 适配本地 HTTP；部署到 HTTPS 时改为 `true` |
+| `SIMULATION_ASSET_CHECK_MS` | `2000`，素材检查默认延迟 |
+| `SIMULATION_GENERATE_MS` | `2000`，模拟生成默认延迟 |
+| `SIMULATION_FINALIZE_MS` | `2000`，结果整理默认延迟 |
 
-Node、Maven、Temurin JRE 和 MySQL 镜像已在 Dockerfile/Compose 固定 digest。构建 JDK 为 Temurin 21.0.9+10，运行 JRE 为 21.0.12.1+1；MyBatis Core 3.5.19、Connector/J 9.7.0、Flyway 11.7.2。React 固定 19.3.1，满足所选 Next.js 的 peer 范围。以锁文件、POM、镜像和实际检查为证据。M0 详细记录见 [docs/M0-validation.md](docs/M0-validation.md)。
+延迟范围为整数 0～30000 毫秒。默认值由 Java 读取，任务提交时保存配置快照。Compose 将数据库配置映射为 Java 的 `SPRING_DATASOURCE_URL/USERNAME/PASSWORD`；文件目录映射为 `STORAGE_ROOT=/app/data`。如自行编排 Java 容器，需提供这些配置；连接 URL 为 `jdbc:mysql://db:3306/material_studio?connectionTimeZone=UTC`。
 
-## 3. 业务设计与不可破坏的约束
+实际 `.env` 不入库，数据库配置不会进入浏览器 bundle。Java 运行堆上限 512 MiB，并设置两逻辑 CPU 视图；这不是容器总内存上限。前端构建堆为 768 MiB，构建与测试并发限制为 2。`test-db` 使用独立临时数据库，停止后不保留测试数据。
 
-### 3.1 模板、上传与素材
+模板为 3 类、6 个，覆盖单图与双图。SVG 封面随 Java 镜像提供；上传示例是 `demo-inputs/sample-1.png`、`sample-2.png`、`sample-1.jpg`，无需下载或生成。上传支持 JPEG/PNG，每张不超过 5 MiB、2400 万像素；服务端检查真实格式、可解码性、尺寸、素材归属和模板参数，不只信任扩展名。
 
-- 至少准备三个分类和四个模板，覆盖单图、双图等不同数量要求；种子含标题、描述、分类、封面、图片数量、接受 MIME 和单文件大小。
-- 默认支持 JPEG / PNG，单文件上限 5 MiB；不同模板可以进一步限制。限制由 Java 返回，前端读取展示，Java 在提交时重新校验。
-- 示例封面与结果样例随源码交付；记录来源和许可。运行时不依赖付费、内部服务或临时第三方图片 URL。
-- 每个上传位独立维护 `empty / uploading / ready / error`，含本地预览、服务端 `assetId`、错误与本次上传标识。
-- 选择后可用 Object URL 即时预览；替换/移除/卸载时释放该 URL。提交必须使用已上传的 `assetId`，不能提交浏览器临时地址。
-- 替换时取消旧上传或通过上传批次标识忽略旧响应，防止旧图片覆盖新选择；失败位能重新选择。移除暂不要求立即删除服务端文件。
-- Java 检查实际字节大小、允许的文件类型及图片内容可解码性，限制图片尺寸/像素量；不只信任扩展名和客户端 MIME。异常返回可理解错误，不暴露服务器路径。
-- 服务端生成文件名并限制存储根目录；素材绑定当前用户。提交检查素材存在、归属、实际可访问性、数量、重复 ID 和模板适配。
-- 仅全部上传位 ready 且未提交时允许制作。提交中防重入；每次制作生成 `clientRequestId`，同用户同请求 ID 重试返回原任务，避免网络超时后重复创建。
-- 提交成功即结束“提交中”，向历史插入已受理任务；允许继续创建其他任务。提交超时保留请求 ID 和素材，重试仍复用该 ID；明确成功后下一次主动制作使用新 ID。
+## 4. 主要接口
 
-### 3.2 用户身份与个人记录
+浏览器均从同源 `/api` 访问；时间保存为 UTC，返回 ISO 8601，前端按本地时区展示。
 
-采用用户已确认的**显式选择的演示账户 + Java 服务端会话**，用于验证用户归属和切换，暂不实现注册、邮箱验证和密码重置。
+| 方法与路径 | 请求 / 响应 | 身份 |
+| --- | --- | --- |
+| GET `/api/system` | `{name,version,status}` | 公开 |
+| GET `/api/templates/categories` | 分类字符串数组 | 公开 |
+| GET `/api/templates?category=创意图片` | 模板数组；省略分类返回全部 | 公开 |
+| GET `/api/templates/{id}` | 单个模板，不存在 404 | 公开 |
+| GET `/api/templates/{id}/cover` | 本地 SVG 封面 | 公开 |
+| GET `/api/demo-users` | `[{id,demoKey,displayName}]` | 演示模式 |
+| POST `/api/session` | `{demoUserKey:"alice"}`；返回用户，设置会话 Cookie | 演示模式 |
+| GET `/api/session` | 当前用户；无有效会话 401 | 当前会话 |
+| DELETE `/api/session` | 注销当前会话，204 并清除 Cookie | 当前 Cookie |
+| POST `/api/assets` | multipart `file`、`templateId`；201 `{id,previewUrl,mimeType,sizeBytes}` | 必须登录 |
+| GET `/api/assets/{id}/content` | 上传或结果图片，仅归属用户可读 | 必须登录 |
+| POST `/api/tasks` | 创建请求如下；202 返回任务快照及 Location | 必须登录 |
+| GET `/api/tasks/{id}` | 单个任务及步骤 | 必须登录 |
+| GET `/api/tasks` | 当前用户全部历史，按创建时间降序 | 必须登录 |
 
-1. 数据库初始化两个固定演示用户 Alice、Bob；用户通过界面选择账户。
-2. Java 创建随机不透明会话令牌，数据库存令牌摘要与到期时间；浏览器保存 HttpOnly、SameSite=Lax、Path=/ 的 Cookie。同源代理转发 Cookie；HTTPS 部署启用 Secure。
-3. 所有上传、任务创建、任务查询、个人历史与私有文件访问均从会话取得用户 ID，不接受客户端传入的 `userId` 作为授权依据。
-4. 查询其他用户的任务/素材统一返回 404；无会话/会话过期返回 401。模板与模板封面可公开读取。
-5. 切换账户时串行完成取消请求、清理个人缓存/上传状态、更新会话、读取新身份及历史；旧响应不能覆盖新用户状态。后台旧用户任务继续执行。
-6. 演示：Alice 创建任务，切换 Bob 应看不到 Alice 记录；切回 Alice 后恢复历史及未完成任务；刷新通过 Cookie 恢复当前身份。
-
-边界：演示登录入口允许主动选择任一演示身份，不构成生产级身份认证；“个人隔离”指当前会话下的资源访问约束。正式使用前需替换真实认证并完善 CSRF、登录防护等机制。不得在交付说明中把演示账户描述成安全的真实账户体系。
-
-### 3.3 状态、阶段与结果
-
-整体状态：`QUEUED`（等待）、`RUNNING`（处理中）、`SUCCEEDED`（成功）、`FAILED`（失败）。当前阶段单独存储：`ASSET_CHECK`（素材检查）、`GENERATE`（模拟生成）、`FINALIZE`（结果整理）；排队时阶段为空。
-
-```text
-QUEUED
-  → RUNNING / ASSET_CHECK
-  → RUNNING / GENERATE
-  → RUNNING / FINALIZE
-  → SUCCEEDED + resultUrl
-
-任一阶段异常 → FAILED + failedStage + errorCode + errorMessage
-```
-
-- 每个阶段开始前提交阶段记录，结束后提交阶段完成记录；不在一个长事务里执行全部延迟。
-- `task_steps` 保存每步的开始/结束、状态与失败原因，可独立验证执行边界；失败后的步骤不执行，不写成成功。
-- 进入下一阶段前确认上一步成功；结果文件可读取后，才在同一数据库事务中保存结果素材关联和任务成功状态。
-- 成功/失败为不可逆终态；更新使用预期旧状态条件，读取接口无任务状态写入副作用。
-- 创建时保存模板标题等必要快照、素材关联与模拟配置快照，避免后续种子或配置变化影响既有任务。
-- 失败时返回面向用户的原因，例如“模拟生成阶段按配置失败”；日志记录任务 ID、阶段和异常上下文，避免只返回堆栈。
-- 不强制百分比进度；成功结果为后端持久化的可预览图片；当前模拟器复制首张上传图片为独立结果文件，不做真实 AI 或图片风格处理。
-
-### 3.4 Java 异步工作器与进程边界
-
-提交接口在一个短事务中完成校验、幂等检查、任务和素材关联建档，提交后返回 HTTP 202。后台独立工作器定期领取最早的 `QUEUED` 任务，依次执行三步。初版单工作器串行处理，多任务允许排队。
-
-拟使用专用单线程调度执行器运行工作循环，与 HTTP 请求线程分离；通过 `QUEUED → RUNNING` 条件更新领取任务。后台只消费已提交记录，避免异步线程读取未提交任务；任务提交不依赖一次容易丢失的内存事件。
-
-阶段数据库更新由独立事务服务执行，避免 Spring 同类调用导致事务注解失效。检查/延迟/文件操作放在事务外；失败后短事务保存终态。单任务异常必须被捕获，工作循环仍能处理下一任务。
-
-初版仅支持一个 Java 实例。重启处理的**计划**是：启动工作器前，将遗留 `RUNNING` 任务标记 `FAILED / PROCESS_INTERRUPTED`，保留中断阶段及可理解原因；原 `QUEUED` 任务继续处理。已完成任务和结果从持久化数据恢复。该方案不支持从阶段中间续跑；实现与重启验证完成前不得标记为已支持。若最终未实现上述收敛，须明确记录遗留任务可能停留 RUNNING 的限制。
-
-### 3.5 可重复失败与耗时配置
-
-默认每阶段 2000 ms；各阶段允许配置 0～30000 ms，用于演示，不随机失败。模拟配置在创建任务时持久化，运行中不受后续配置变化影响。
-
-开发/演示模式允许创建任务时附带以下字段；正式模式禁用覆盖并明确拒绝，不静默接受：
+模板字段示例：
 
 ```json
 {
-  "templateId": "demo-postcard",
-  "assetIds": ["asset-a", "asset-b"],
-  "clientRequestId": "每次新制作生成的 UUID；同次重试复用",
+  "id": "demo-postcard", "title": "山海来信", "category": "创意图片",
+  "coverUrl": "/api/templates/demo-postcard/cover",
+  "description": "上传两张图片，模拟制作明信片",
+  "requiredImageCount": 2,
+  "acceptedMimeTypes": ["image/jpeg", "image/png"], "maxFileSizeBytes": 5242880
+}
+```
+
+创建任务示例（`assetIds` 必须替换为当前用户真实上传返回的 ID）：
+
+```json
+{
+  "templateId": "demo-portrait",
+  "assetIds": ["实际上传返回的素材ID"],
+  "clientRequestId": "9c2ea801-01c1-46e7-a442-5e1701e74643",
   "simulation": {
-    "failAtStage": "GENERATE",
-    "stageDelayMs": { "ASSET_CHECK": 2000, "GENERATE": 8000, "FINALIZE": 2000 }
+    "failAtStage": null,
+    "stageDelayMs": {"ASSET_CHECK": 2000, "GENERATE": 8000, "FINALIZE": 2000}
   }
 }
 ```
 
-`failAtStage` 为 `null` 表示成功；其他值只接受三个阶段枚举。按配置进入该阶段、保存开始记录、等待指定时间后触发失败，保存失败记录，不执行后续阶段。参数类型、范围、未知枚举和未知素材均由 Java 校验。
+`simulation` 可省略。`failAtStage` 为 null / `ASSET_CHECK` / `GENERATE` / `FINALIZE`；耗时 Map 可只覆盖部分阶段。`DEMO_MODE=false` 时拒绝传入模拟覆盖配置，也不开放演示登录，**不等于已经提供生产身份体系**。
 
-### 3.6 前端查询生命周期
+任务快照字段：`id`、`templateId`、`templateTitle`、`status`、`stage`、`createdAt`、`startedAt`、`finishedAt`、`resultUrl`、`failedStage`、`errorCode`、`errorMessage`、`version`、`steps`。未开始/未完成字段可为 null；每个 step 含 `taskId/stage/status/startedAt/finishedAt/errorMessage`。
 
-- 服务端状态是真相来源。任务状态、阶段、结果、业务失败原因从 Java 读取，不能靠前端定时器伪造。
-- 个人历史 key 含用户 ID；单任务 key 使用 `['task', userId, taskId]`。每个任务独立数据与请求错误，不使用一个全局“当前任务”覆盖多任务。
-- 首次进入详情/历史或刷新时先加载个人历史，从全部未结束记录建立跟踪集合。初版小规模演示返回完整个人历史，不分页，避免只恢复第一页而漏掉旧的活动任务；数据量扩大后增加分页与独立活动任务查询。
-- 每个活动任务只建立一个轮询观察者，其他组件共享缓存；正常情况下约 2 秒更新，终态关闭该任务的自动刷新，包括不必要的焦点/重连触发。
-- 查询失败保留最后已知任务状态并显示“状态更新失败”，不能写成业务 FAILED；暂停该任务的自动查询，提供“恢复查询”，恢复后继续跟踪非终态。默认关闭查询自动重试，以保证行为可解释。
-- 没有活动任务时没有周期轮询；历史可手动刷新。切换页面后卸载相关观察者；返回页面重新读取。创建任务成功主动更新/失效历史缓存。
-- fetch 使用 AbortSignal。切换用户/卸载清理订阅、计时器和请求，并通过用户及请求标识阻止旧结果落地。
-- 401 提示会话恢复/重新选择身份，404 表达记录不存在；这些请求错误均不得篡改后台任务状态。
+错误统一为 `{code,message,traceId}`。400 参数错误、401 未登录、403 演示功能关闭、404 不存在或无权访问、409 幂等参数冲突、413 文件过大、415 图片类型/内容不符、500 服务异常。不会向客户端暴露服务器文件路径或堆栈。
 
-## 4. 拟定数据结构与接口契约
-
-### 4.1 数据表
-
-| 表 | 关键内容与约束 |
-| --- | --- |
-| `users` | ID、演示标识（唯一）、显示名、创建时间 |
-| `sessions` | token 摘要（唯一）、用户 ID、到期时间 |
-| `templates` | ID、标题、分类、说明、封面路径、数量、MIME、文件大小限制 |
-| `assets` | ID、用户 ID、用途 UPLOAD/RESULT、存储相对路径、MIME、字节数、创建时间 |
-| `tasks` | ID、用户 ID、模板 ID/标题快照、clientRequestId、status、stage、模拟配置、结果素材 ID、失败字段、创建/开始/结束时间、version |
-| `task_assets` | taskId、assetId、slotIndex；保留上传顺序，约束重复关联 |
-| `task_steps` | taskId、stage（联合唯一）、执行状态、开始/结束、失败原因 |
-
-索引至少包括 `tasks(user_id, created_at, id)`、`tasks(status, created_at, id)`；幂等唯一键为 `(user_id, client_request_id)`。MyBatis 使用参数绑定。时间按 UTC 存储、以 ISO 8601 返回，前端按本地时区展示。数据库结构及种子以迁移文件为准，M1 后补 ER 图及真实字段类型。
-
-### 4.2 HTTP API（路径暂定）
-
-| 方法与路径 | 请求 | 成功响应/用途 |
-| --- | --- | --- |
-| `GET /api/templates/categories` | 无 | 分类列表 |
-| `GET /api/templates?category=...` | 可选分类 | 模板列表 |
-| `GET /api/templates/{id}` | 模板 ID | 详情及上传约束；不存在 404 |
-| `GET /api/templates/{id}/cover` | 模板 ID | 公开封面图片 |
-| `GET /api/demo-users` | 无 | 可选择的演示用户，仅演示模式开放 |
-| `POST /api/session` | `{demoUserKey}` | 当前用户 + Set-Cookie，仅演示模式开放 |
-| `GET /api/session` | Cookie | 当前用户或 401 |
-| `DELETE /api/session` | Cookie | 撤销会话、清除 Cookie，204 |
-| `POST /api/assets` | multipart `file`、`templateId` | 201：素材 ID、预览地址、MIME、字节数 |
-| `GET /api/assets/{id}/content` | Cookie | 当前用户上传/结果图片；校验归属 |
-| `POST /api/tasks` | 模板、素材 ID 数组、clientRequestId、可选 simulation | 202 + Location：已持久化任务及 ID；同请求 ID 返回原任务 |
-| `GET /api/tasks/{id}` | Cookie | 当前用户任务详情，含步骤信息 |
-| `GET /api/tasks` | Cookie | 当前用户历史，按创建时间及 ID 倒序 |
-| `GET /actuator/health` | 内部访问 | 容器健康/就绪检查，不泄露凭据 |
-
-任务响应拟定示例：
-
-```json
-{
-  "id": "task-uuid",
-  "templateId": "demo-postcard",
-  "templateTitle": "旅行明信片",
-  "status": "RUNNING",
-  "stage": "GENERATE",
-  "createdAt": "2026-10-29T12:00:00Z",
-  "startedAt": "2026-10-29T12:00:01Z",
-  "finishedAt": null,
-  "resultUrl": null,
-  "failedStage": null,
-  "errorCode": null,
-  "errorMessage": null,
-  "version": 3,
-  "steps": []
-}
-```
-
-错误响应统一为 `{code, message, fieldErrors?, traceId}`。采用 400 参数错误、401 未登录、404 不存在/无权读取、409 幂等键请求内容冲突、413 文件过大、415 不支持类型、500 服务异常。若同一幂等键提交不同素材或参数应拒绝；网络错误与业务 FAILED 分开处理。接口最终字段及命令示例在 M2/M3 随实现更新。
-
-## 5. 项目结构、配置与容器入口（拟定）
+## 5. 后台流程与前端状态
 
 ```text
-.
-├── README.md                    # 唯一权威文档；EADME.md 为跳转入口
-├── frontend/
-│   ├── src/app/                 # 模板、详情、历史、用户入口
-│   ├── src/components/
-│   ├── src/lib/                 # 类型、API、query keys、查询生命周期
-│   ├── src/test/
-│   ├── package.json / package-lock.json
-│   └── Dockerfile               # runner 与 check 阶段
-├── backend/
-│   ├── src/main/java/           # controller/service/mapper/worker/config
-│   ├── src/main/resources/db/migration/
-│   ├── src/main/resources/demo/ # 封面、结果、上传测试样例
-│   ├── src/test/                # 单元与 MySQL 集成测试
-│   ├── pom.xml / mvnw / mvnw.cmd / .mvn/
-│   └── Dockerfile
-├── compose.yaml
-├── .env.example
-├── .github/workflows/ci.yml
-└── docs/                        # 验收记录、素材来源、参考图
+POST 校验 + 短事务创建 QUEUED → 返回 202 / 任务 ID
+  Java 独立工作器约每 500ms 领取最早任务（串行，CAS 领取）
+    → RUNNING / ASSET_CHECK 素材检查
+    → RUNNING / GENERATE 模拟生成
+    → RUNNING / FINALIZE 结果整理
+    → SUCCEEDED / resultUrl
+  任一步异常 → FAILED / failedStage / errorCode / errorMessage → 不再执行后续步骤
 ```
 
-### 5.1 配置契约
+- 任务、阶段、失败原因和结果均持久化至 MySQL；`task_steps` 保存独立执行边界。延迟和文件操作在短事务外执行，不用一个长事务包住全部处理。
+- 成功结果关联、最后一步完成及任务成功在同一事务提交。所有 GET 接口只查询，不推进执行；终态不会因查询退回处理中。
+- 幂等键为用户 + `clientRequestId`（UUID），相同内容重试返回同一任务；不同内容复用键返回 409。前端提交请求失败重试沿用键，受理成功后下一次创作用新键。
+- 上传中、提交请求中、等待/处理、成功、业务失败分别表达。202 后释放提交按钮，允许继续创建，后台任务不依赖页面存活。
+- TanStack Query 缓存键包含用户和任务 ID；按 version 合并，拒绝旧响应及终态回退。只自动跟踪未结束任务，终态/无任务停止轮询。
+- 查询暂时失败保留已有任务信息，显示“恢复查询”，不把任务改为 FAILED；恢复按钮重新读取真实状态。身份查询 503 保留已知身份，401 才清除身份。
+- 切换用户取消旧查询、清理个人缓存及上传草稿；离开任务页面取消请求。刷新从 Java 恢复历史并继续跟踪未结束任务。
+- **重启边界已验证**：启动时将遗留 RUNNING 收敛为 FAILED / PROCESS_INTERRUPTED，保留中断阶段；QUEUED 继续执行；终态及文件保留。不支持从阶段中间续跑，仅支持单个 Java 实例。
 
-| 配置 | 拟定含义 |
-| --- | --- |
-| `WEB_PORT=3000` | 宿主机访问前端端口 |
-| `JAVA_API_ORIGIN=http://backend:8080` | Next.js 服务端转发地址；浏览器不访问 Compose 内部主机名 |
-| `SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/material_studio?connectionTimeZone=UTC` | Java 到 MySQL 的容器内连接 |
-| `MYSQL_DATABASE=material_studio`、`MYSQL_USER=material_app` | 演示数据库及应用用户 |
-| `MYSQL_PASSWORD`、`MYSQL_ROOT_PASSWORD` | 由使用者在本地 `.env` 配置；示例仅含明显占位值 |
-| `SPRING_DATASOURCE_USERNAME/PASSWORD` | 由 Compose 将对应数据库变量映射给 Java |
-| `STORAGE_ROOT=/app/data` | 持久化上传及结果目录 |
-| `DEMO_MODE=true` | 开启演示账户和逐任务模拟参数覆盖 |
-| `SIMULATION_ASSET_CHECK_MS / GENERATE_MS / FINALIZE_MS` | 三阶段默认耗时，均拟为 2000 |
-| `SESSION_TTL_SECONDS=86400`、`SESSION_COOKIE_SECURE=false` | 本地演示会话；HTTPS 部署调整 Secure |
+数据表为 `users`、`sessions`、`templates`、`assets`、`tasks`、`task_assets`、`task_steps`，另有工程元数据和 Flyway 历史表。任务按用户/创建时间及状态/创建时间建立索引；幂等键有唯一约束，素材和任务归属由服务端会话确定。真实字段以 `backend/src/main/resources/db/migration/` 为准。
 
-实际 `.env` 不提交，`.env.example` 不放真实凭据。前端 bundle 不暴露数据库或会话密钥；不使用 `NEXT_PUBLIC_*` 保存秘密。环境变量名、默认值、必填项和构建期/运行期作用范围需在 M0/M7 对齐代码。
+## 6. 演示操作
 
-MySQL 首次就绪后由 Flyway 执行结构及种子迁移，初始化必须可重复启动且不重复造数。后端文件卷保存用户文件；模板样例随镜像提供。已有数据库卷不会因容器重建被重新初始化；结构演进走新增迁移。
+1. **成功**：选择 Alice → 光影肖像 → 上传 `sample-1.png` → 开始制作；依次看到三阶段和成功结果，点击作品预览。
+2. **指定阶段失败**：展开“演示设置”，勾选模拟参数，选择失败阶段并提交。分别选择三阶段可重复复现；卡片显示失败阶段/原因，后续阶段不执行。
+3. **调整耗时/多任务**：模拟生成设置为 15000 毫秒，连续提交两次；第一个处理、第二个等待，各自结束。也可在 `.env` 修改三个默认耗时并重建后端容器配置。
+4. **刷新恢复/离开**：任务处理中刷新或返回模板列表，稍后打开“我的创作”；记录由 Java 恢复，后台持续执行。上传草稿不做刷新恢复。
+5. **个人隔离**：Alice 创建记录后，通过顶部账户窗口切到 Bob，应只看到 Bob 的记录；再切回 Alice 恢复 Alice 历史。直接读取他人任务或图片返回 404。
+6. **查询请求异常**：保持制作页打开，在任务处理时运行 `docker compose stop frontend`，等待页面提示查询失败；Java 仍执行。运行 `docker compose up -d --wait frontend` 后点“恢复查询”，读取最终状态。无需刷新整个页面。
 
-### 5.2 启动和检查命令（实现后才能执行）
+程序化成功、指定失败、幂等、跨用户和终态演示：
 
-从仓库根目录复制 `.env.example` 为 `.env`，替换本地示例密码，再执行：
-
-```bash
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail=100 backend
+```sh
+docker compose --profile checks run --rm api-check
 ```
 
-入口预期为 `http://localhost:3000`。数据库不默认暴露宿主机端口，Java 通过 `db:3306` 连接；后端默认仅容器网络可达。Compose 配置 MySQL/Java 健康检查及启动依赖，不把“容器进程已启动”等同于业务已就绪。
+该脚本会给 Alice 增加 1 个成功及 3 个指定失败任务，不删除原记录。强制终止 Java 的可重复演练命令见 [M6 验证记录](docs/M6-validation.md)，只用于独立演示环境；脚本不输出或落盘会话令牌。
 
-检查服务拟使用 `checks` profile，服务代码在镜像构建时复制，避免绑定挂载覆盖镜像依赖：
+## 7. 用户身份与个人记录
 
-```bash
-docker compose --profile checks build frontend-check backend-check
+采用用户已确认的 Alice / Bob 演示账户方案，无注册、密码或真实个人信息。POST 登录由 Java 产生 32 字节随机令牌，Cookie 为 `studio_session`、HttpOnly、SameSite=Lax、Path=/，默认 24 小时；MySQL 仅存 SHA-256 摘要和失效时间。切换/注销撤销当前令牌，同一演示账户可有多个独立客户端会话。
+
+每次素材和任务请求由 Java 验证会话，不能由客户端传 `userId` 指定归属。图片响应为私有、no-store，结果地址需要会话。演示账户可自由切换，这只是展示归属隔离的演示身份，不能作为公网真实用户认证使用。不同浏览器标签共享 Cookie，本项目未实现跨标签即时身份广播；需要刷新或重新聚焦同步身份。
+
+## 8. 构建、测试与 CI
+
+全部使用容器，不在宿主机运行项目脚本。低内存机器可先 `docker compose stop frontend backend db`，按顺序执行检查，结束后再启动演示环境：
+
+```sh
+docker compose config --quiet
+docker compose --profile checks build frontend-check
 docker compose --profile checks run --rm frontend-check
+docker compose --profile checks build backend-check
 docker compose --profile checks run --rm backend-check
+docker compose --profile checks stop test-db
+docker compose up --build -d --wait
+docker compose --profile checks run --rm api-check
 ```
 
-- `frontend-check`：容器内 `npm ci`、`npm run lint`、`npm run typecheck`、`npm run test -- --run`、`npm run build`。
-- `backend-check`：容器内固定 Maven 3.9.11 执行 `mvn -B verify`，含单元测试、真实 MySQL 集成测试及打包；测试数据库独立于演示数据库。另提供同版本 Maven Wrapper，已验证版本入口；镜像中直接使用自带 Maven，避免每次检查再次下载 Maven 分发包。
-- Java 集成测试通过 Maven Failsafe 或等价显式配置接入 `verify`；MySQL 不可达应失败，不以静默跳过计作通过。
-- 以上为检查服务必须实现的契约，不是当前已有脚本。评估者无需在宿主机运行 npm/Maven/应用脚本。
+- 前端检查：镜像内 `npm ci`，运行 `npm run lint`、`npm run typecheck`、`npm run test -- --run`、`npm run build`。`package.json` 提供聚合命令 `npm run check`。
+- Java 检查：Maven 3.9.11 的 `mvn -B verify`，先单元测试，再真实 MySQL 集成测试与打包；数据库不可达会失败，不静默跳过。另附固定版本 Maven Wrapper。
+- 正式镜像构建阶段 Java 使用 `package -DskipTests`，因为测试需在独立数据库检查服务中执行；CI 的 backend job 明确执行 verify，不能只把正式镜像构建当作测试通过。
+- 容器内应用执行入口为 Next standalone `node server.js` 和 Java `java -jar /app/app.jar`，Compose 负责连接与健康检查。宿主机不需要执行这两个命令。
+- CI 在 push/PR 执行前端检查、Java 检查、完整集成及进程中断演练三个 job。没有要求自动部署。**本地等价命令已验证，GitHub Actions 尚未远程运行。**
 
-## 6. 开发计划与逐模块验收
+最近验证（2026-10-30）：前端 17 项测试 + lint/typecheck/build 通过；Java 5 项单元 + 13 项 MySQL 集成测试，0 失败/错误/跳过；真实 API 链条、SIGKILL 收敛、排队恢复、容器重建后文件和历史持久化通过。浏览器 320/390 像素无横向溢出，键盘上传/提交及弹窗焦点恢复通过。图片失败反馈有受控测试；浏览器断网尝试因资源缓存未触发该场景，不将其计为实际断网验证通过。
 
-按依赖顺序推进，每个模块交付可单独验证的结果；不得在前置链条不可用时堆叠全部页面再一次性联调。不按天分配模块，也不设三天截止约束；每阶段记录实际投入、验证结果及剩余问题。
+## 9. 开发计划与逐模块验收
 
-| 模块 | 依赖 | 交付物 | 独立验收与退出条件 |
-| --- | --- | --- | --- |
-| M0 工程与版本基线 | 无 | 精确版本清单、锁文件、前后端最小工程、Compose 骨架、CI 基础检查、配置示例 | 容器内前端 lint/typecheck/build 与 Java 最小测试/打包通过；配置不含真实凭据 |
-| M1 数据与模板浏览 | M0 | MySQL/Flyway、模板种子与本地素材、分类/列表/详情 Java 接口、前端卡片与路由 | 空库初始化和二次启动成功；分类数据来自 Java；不存在模板返回 404；封面可读取；页面有加载/空态/错误 |
-| M2 身份与素材上传 | M1 | 演示会话、个人归属、文件持久化、动态上传位、双端校验 | 1/2 图模板可操作；预览/替换/移除/上传失败可恢复；伪造类型/超限/他人素材被拒；刷新后服务端文件仍可读 |
-| M3 任务异步链条 | M2 | 幂等受理、任务/步骤表、Java 工作器、可控生成器、结果存储、任务/历史接口 | 202 返回不等待制作；三步顺序可观测；三阶段失败分别可复现且中断后续；关闭页面不终止任务；后端核心测试通过 |
-| M4 前端多任务与恢复 | M3 | 任务卡片、按任务查询、请求异常恢复、历史页、用户切换清理 | 连续创建任务互不覆盖；终态停轮询；查询故障不变业务失败；刷新继续跟踪；用户切换隔离；关键前端测试通过 |
-| M5 视觉与基本可用性 | M4 | 参考布局、统一暗色样式、响应式、状态组件、标签/焦点/对话框操作 | 桌面列表和双栏详情可用；窄屏无阻断操作；键盘可完成主要流程；失败/空态/图片缺失有反馈 |
-| M6 可靠性与回归 | M3～M5 | MySQL 集成测试、异常链条回归、重启边界验证、CI 完整检查 | 成功/失败/多任务/刷新/跨用户全链条通过；验证幂等、终态不回退；CI 容器测试和构建无跳过/无忽略失败 |
-| M7 交付整理 | M6 | 正式 README、版本/来源/验证记录、部署回滚说明、源码包或验收 commit | 从干净环境按文档启动成功；文件卷持久化验证；用户补齐 AI 工作流；文档命令逐项核对；无依赖缓存或秘密入包 |
+每个模块先完成可独立验证的链条，再更新本文、验证记录并汇报；不按天划分工作。不能以“已编码”替代“已运行验证”。
 
-模块执行约定：
-
-1. 开始前读取本文件与现有代码，确认本模块契约；影响接口、身份、状态机或交付方式的变化要先更新方案并反馈。
-2. 实现本模块最小闭环，补核心行为测试与错误处理，再在容器中执行对应验证。
-3. 失败先定位和修复，再继续依赖模块；不得靠禁用类型检查、跳过测试或吞掉错误凑通过。
-4. 更新完成状态、命令、测试证据、实际工时和剩余问题。无法验证时记录原因，不能勾选“已验证”。
-5. 可独立推进的文档/样例不受单个工具缺失阻塞；遇到需要用户决策或环境权限的问题及时反馈。
-
-## 7. 测试、CI 与演示清单
-
-### 7.1 必要测试
-
-| 范围 | 关键行为 |
-| --- | --- |
-| Java 状态机单元测试 | 成功严格按三步执行；每一步失败均停止后续；失败阶段/原因正确；单任务异常不阻断下一任务；延迟器可注入，测试不依赖长时间真实 sleep |
-| Java/MySQL 集成测试 | 迁移与种子；创建/查询持久化；幂等与用户隔离；阶段独立提交可读取；终态不回退；上传与结果路径可读；启动中断收敛（若实现） |
-| Java 受理时机测试 | 使用可控阻塞生成器验证请求在工作结束前返回，不能只凭机器相关的毫秒阈值断言异步 |
-| 前端多任务 | A 成功/B 失败/C 等待的交错响应不串扰；某任务结束只停止它的跟踪；全部结束后计时器不再发起周期请求 |
-| 前端请求异常 | 503/网络故障保留上次任务状态；“恢复查询”后继续；只有服务端明确 FAILED 才显示执行失败 |
-| 前端生命周期 | 切用户/离页取消；迟到响应不能污染新用户；刷新从历史恢复活动任务；替换上传忽略旧响应 |
-| 上传与提交 | 数量/类型/大小反馈，未就绪/提交中禁用，受理后按钮释放，超时重试复用请求 ID |
-
-不要求测试数量或覆盖率指标，也不要求端到端浏览器自动化。以有业务意义的断言为准；视觉及键盘交互进行人工/浏览器检查并记录，不编写仅镜像样式实现的测试。
-
-### 7.2 CI 约定
-
-GitHub Actions 在 `push`、`pull_request` 触发，执行前端 lint、TypeScript 检查、前端测试及生产构建、Java 测试和构建。检查通过 Compose 检查服务在容器中运行，集成测试使用隔离 MySQL；GitHub runner 负责检出、编排容器及上传失败日志。检查不得依赖真实用户凭据或付费服务，不要求自动部署。
-
-### 7.3 演示脚本（实现后补真实入口及可复制请求）
-
-1. **成功**：Alice 选择模板，上传规定数量的仓库样例，使用 `failAtStage: null`；观察等待/三阶段/成功图片。
-2. **指定失败**：分别创建 `ASSET_CHECK`、`GENERATE`、`FINALIZE` 失败任务；核对失败阶段/原因及后续步骤未执行。
-3. **耗时与多任务**：将生成阶段设为 8000 ms，连续提交至少三个任务；观察排队、独立状态和结果。串行排队属于预期行为。
-4. **查询异常**：在浏览器开发工具中阻止某个任务 GET，保留提交和其他查询；应显示查询故障而非任务执行失败，解除后点“恢复查询”。自动化测试另通过 MSW 的 503 响应复现。
-5. **刷新/关页**：处理中刷新或关闭页面，稍后返回；由 Java 恢复历史及当前状态，后台任务不依赖前端。
-6. **用户隔离**：切换 Bob，不显示 Alice 记录；用 Bob 会话访问 Alice 任务和素材应为 404；切回 Alice 恢复。
-7. **持久化/重启**：重建应用容器并保留卷，成功记录和图片仍可读；运行中任务按最终实现的中断策略收敛。不要将此项与浏览器刷新恢复混淆。
-8. **上传异常**：少传、多传、超限、伪造文件类型、请求失败、快速替换；均有反馈且不可错误提交。
-
-## 8. 部署、备份与回滚基线
-
-本节仅为开发目标，M7 完成实际演练后补精确命令和镜像标识。
-
-- 本地部署：准备 Docker/Compose，配置 `.env`，执行 `docker compose up --build -d`，等待健康检查，执行成功与失败冒烟演示。
-- 停止应用：`docker compose down` 保留命名卷；日常更新不删除卷。不要使用 `down -v` 作为回滚步骤。
-- 升级前：记录当前源码 commit、镜像标签、迁移版本；备份 MySQL 和文件卷，并记录一致性方式（演示环境可先停止任务写入再备份）。
-- 升级：构建新镜像、保留卷启动、检查迁移日志与健康状态、验证登录/上传/制作/历史。
-- 应用回滚：恢复前一个已知可用镜像或 commit 重建，仅在旧代码兼容当前数据库结构时直接回退。
-- 数据库不兼容时：停止写入，恢复升级前数据库与对应文件备份，再启动配套旧镜像；不假定 Flyway 自动逆向迁移。
-- 无需公网地址、真实线上部署或复杂发布平台。生产认证、高可用、监控告警及多实例存储不在本次交付承诺内。
-
-## 9. 完成状态、验证与实际投入
-
-### 9.1 当前状态
-
-- [x] 接收并整理项目目标、R-02～R-14 与页面参考。
-- [x] 编写初版业务设计、技术取舍、模块计划与验收清单。
-- [x] M0 工程、版本锁定与最小容器检查（2026-10-29，北京时间约 20:30）。
-- [x] M1 数据初始化、模板 API 与浏览页面（2026-10-29，北京时间约 20:56）。
-- [x] M2 演示身份与素材上传（2026-10-29，北京时间 21:24）。
-- [x] M3 Java 异步三阶段与失败模拟（2026-10-29，北京时间 21:43）。
-- [x] M4 前端多任务、历史与恢复（2026-10-30：最新正式镜像复核通过）。
-- [x] M5 视觉、小屏与键盘操作（2026-10-30）。
-- [x] M6 核心测试、完整 CI 配置与本地可靠性验证（2026-10-30；远程 CI 尚未执行）。
-- [ ] M7 可运行交付、正式 README 与回滚说明。
-- [ ] 用户填写 AI 工作流并确认交付材料。
-
-当前已打通浏览模板、登录演示账户、上传素材、提交异步任务、查询阶段、查看个人历史和结果的主要业务链条。M4 前端支持多任务独立跟踪、终态停轮询、请求异常恢复及刷新恢复；最新检查结果为前端 16 项测试通过，最近一次后端结果为 5 项单元测试 + 13 项真实 MySQL 集成测试通过。不同批次的验证不等同于最终版本的完整回归，M6 仍需执行。
-
-截至本次核对：Git 最新提交为 M3 `7048425`，M4 代码仍在工作区，不能将该 commit 当作包含 M4 的交付版本。最新身份异常修复已通过自动化测试，尚未更新正式运行镜像复核。Docker 引擎当前不可连接，网站当前运行状态未验证；此前容器运行和浏览器验证见各模块记录。本次未启动 Docker、未重跑测试、未修改业务代码。GitHub Actions 配置已存在，但尚未远程执行。
-
-开发目标是可运行、关键链条经验证的版本；不能承诺不存在任何未知缺陷，发现问题应记录、复现、修复并回归。
-
-| 模块 | 当前进展 | 已有证据 / 下一步 |
+| 模块 | 交付链条及验收 | 状态 / commit |
 | --- | --- | --- |
-| M0 工程基线 | 已完成，`2887729` | 依赖锁定、Compose、CI 配置、前后端容器检查及健康验证 |
-| M1 模板浏览 | 已完成，`e81703e` | 3 分类、6 模板、Java 数据接口、本地封面、分类与详情页面 |
-| M2 身份与上传 | 已完成，`339cb0d` | Alice/Bob 会话、持久化文件、真实图片校验、私有预览、切换隔离 |
-| M3 Java 异步链条 | 已完成，`7048425` | 三阶段顺序、指定失败中断、幂等、持久化历史/结果、18 项后端测试及真实 API 链条 |
-| M4 多任务与恢复 | 实现及自动化检查完成，待最终验收 | 16 项前端测试与生产构建通过；已有浏览器验证；待最新镜像复核和 Git 提交 |
-| M5 视觉与可用性 | 尚未完成专项验收 | 已有暗色布局及基础响应式；待窄屏、键盘流程、焦点和图片缺失反馈检查与修正 |
-| M6 可靠性与回归 | 尚未完成 | 待实际强制重启演练、最终完整回归和 CI 核对；已有方法级重启恢复测试不替代进程演练 |
-| M7 交付整理 | 尚未完成 | 待正式文档对齐、干净环境复现、部署/回滚演练及源码包/验收 commit；AI 工作流由用户填写 |
+| M0 工程与版本基线 | 依赖锁定、最小前后端、Compose、CI、容器测试/构建/健康 | 完成 `2887729` |
+| M1 模板与浏览 | 空库迁移 → Java 模板/分类/封面 → 列表筛选/详情/404 | 完成 `e81703e` |
+| M2 身份与上传 | 演示会话 → 图片校验/持久化 → 私有预览/替换/移除/用户隔离 | 完成 `339cb0d` |
+| M3 Java 异步链条 | 校验幂等受理 → 三阶段短事务 → 指定失败中断/成功结果 → 历史查询 | 完成 `7048425` |
+| M4 多任务与恢复 | 连续提交 → 独立查询/终态停止 → 请求异常恢复 → 刷新/切换隔离 | 完成 `d1e7234` |
+| M5 视觉与可用性 | 暗色参考布局 → 图片异常 → 320/390 窄屏 → 键盘上传/提交/弹窗焦点 | 完成 `ca4d33f` |
+| M6 可靠性回归 | 前后端核心测试 → API 链条 → SIGKILL → 重建容器后数据/文件恢复 → CI 配置 | 完成 `b14df95` |
+| M7 交付整理 | 正式文档 → 干净源码构建/初始化 → 部署回滚说明 → 源码包/验收标记 | 工程交付完成；用户补齐 AI 工作流后对外提交 |
 
-下一步顺序为：M5 可用性 → M6 可靠性回归 → M7 交付整理。用户已指示继续，Docker 已启动，前端、Java、MySQL 均健康；最新镜像可恢复原有身份、8 条个人记录和结果图片。
+各模块修改文件、效果和验证明细：[M0](docs/M0-validation.md)、[M1](docs/M1-validation.md)、[M2](docs/M2-validation.md)、[M3](docs/M3-validation.md)、[M4](docs/M4-validation.md)、[M5](docs/M5-validation.md)、[M6](docs/M6-validation.md)、[M7](docs/M7-validation.md)。历史记录保留当时的待办表述，当前状态以本文和后续验收补记为准。
 
-### 9.2 已知设计限制
+R-02～R-10 的核心业务链条已经实现，R-11 已完成基础视觉/小屏/键盘检查；R-12 已提供测试和 CI，远程流水线未运行；R-13/R-14 已提供源码和容器交付，干净源码构建、空库初始化和完整链条通过，AI 工作流待用户补齐。参考图中的积分、垃圾桶、重做、密码重置、账单和订阅属于题外功能，不扩展实现。
 
-单 Java 实例、串行处理；无跨进程阶段续跑；演示账户可自由选择；初版历史不分页；本地文件卷无自动清理/灾备；提交文件不立即物理删除；构建需要依赖下载网络。实际实现若有变化，更新本节而非沿用计划描述。
+## 10. 已知限制与部署回滚
 
-### 9.3 验证记录
+- 单 Java 实例、串行消费；不支持多副本协调和阶段中间续跑。强制中断的 RUNNING 失败，QUEUED 恢复执行。
+- 历史不分页，无任务删除/重做/下载；不包含真实 AI、视频、邮件或站外通知。
+- 上传草稿刷新丢失；替换/移除仅取消当前选择，服务器已上传文件不立即删除；无定时清理、配额或自动灾备。
+- 文件与数据库不能原子备份，需停写后配套备份。进程在文件写入与数据库提交之间异常终止可能留下未引用文件；不会凭空生成成功记录。
+- 运行中数据库长期不可达时，失败状态可能无法立即落库；数据库恢复后需重启 Java 执行中断收敛。没有实现租约、跨进程调度或定期扫描卡住任务的机制。
+- 部署需要可拉取依赖；没有公网部署，浏览器验证范围为本机 Chromium 系浏览器，不声称完成所有浏览器/设备的无障碍认证。
+- 文档记录的是已验证范围，不能保证不存在任何未知缺陷；发现问题需复现、修复并回归。
 
-| 日期 | 模块/commit | 环境与命令 | 结果 | 限制/后续 |
-| --- | --- | --- | --- | --- |
-| 2026-10-29 | 文档基线 | 检查工作目录及父级指引；核对官方兼容性文档 | 当前目录为空、无 Git 仓库；仅文档工作 | 未执行应用安装、构建、测试或启动 |
-| 2026-10-29 | M0～M3 / 见上表 commit | Docker Compose 容器构建、前后端检查、MySQL 集成测试、API 脚本及浏览器操作 | 各模块验收通过；最近后端共 18 项测试通过 | 详细证据见 docs/M0-validation.md～docs/M3-validation.md |
-| 2026-10-29 | M4 / 尚未提交 | `docker compose --profile checks build frontend-check`；`docker compose --profile checks run --rm frontend-check` | 22:11 检查日志：lint、typecheck、16 项测试、Next.js 生产构建通过 | 最新身份异常修复待更新运行镜像复核；见 [M4 验证记录](docs/M4-validation.md) |
-| 2026-10-30 | 本次进展核对 / 文档更新 | 读取 Git 状态、代码、现有检查日志、截图及 Compose 状态 | 确认 M0～M3 已提交、M4 实现及检查结果；明确 M5～M7 未完成 | Docker 引擎不可连接；本次未执行构建/测试/应用启动，核对后等待用户反馈 |
+基本部署/备份/回滚步骤见 [部署与回滚说明](docs/DEPLOYMENT.md)。保留旧版本镜像及数据库和文件备份后升级；Flyway 已执行脚本不改写，结构变化新增迁移。应用回退必须确认数据库向后兼容，不能用删卷代替回滚。
 
-### 9.4 实际投入
+## 11. 实际投入
 
-按真实工作会话记录；用户不要求按三天节奏开发，但交付仍需如实记录实际投入。只统计明确记录的投入，避免将对话间等待时间或 AI 运行时间直接当作人工工时。
+只记录有证据的 Agent 会话时段，包含工具执行、构建下载及等待，**不折算成人工工时**。隔夜暂停不计入。用户人工投入和此前讨论时间由用户补录。
 
-| 日期 | 工作内容 | 开始/结束与实际投入 | 取舍/备注 |
-| --- | --- | --- | --- |
-| 2026-10-29 | 需求讨论、初版方案及文档 | 本轮已记录 Agent 工具核查及文档编写时段约 19:48～19:54（北京时间，约 6 分钟）；此前需求讨论及人工投入待用户补录 | Agent 会话时段不等于人工工时；暂不扩展题外功能，优先单实例业务闭环 |
-| 2026-10-29 | M0～M3 开发与验证 | 各模块有记录的 Agent 会话时段约 30 / 25 / 20 / 19 分钟，明细见第 12 节 | 包含工具执行与等待，不折算成人工工时 |
-| 2026-10-29 | M4 开发与验证 | 约 21:43～22:11；依据上个模块结束时间及最后检查日志记录，约 28 分钟 | 包含代码、测试、浏览器操作及构建等待，非人工工时 |
-| 2026-10-30 | 进展核对与文档更新 | 本次会话从北京时间约 11:01 开始；不将隔夜等待计为投入 | 不推进后续功能，等待用户反馈 |
+| 日期（北京时间） | 工作内容 | 有记录的时段 / 约时长 |
+| --- | --- | --- |
+| 2026-10-29 | 初版方案与文档 | 19:48～19:54，约 6 分钟 |
+| 2026-10-29 | M0 / M1 | 20:00～20:30 / 20:31～20:56，约 30 / 25 分钟 |
+| 2026-10-29 | M2 | 20:56～21:08、21:16～21:24，约 20 分钟 |
+| 2026-10-29 | M3 / M4 | 21:24～21:43 / 21:43～22:11，约 19 / 28 分钟 |
+| 2026-10-30 | 进展核对 | 11:01 起的文档核对会话，结束时间未精确记录，不虚报工时 |
+| 2026-10-30 | 恢复环境、M4 复核、M5、M6、M7 | 可确认的工具/文件记录覆盖约 11:14～11:40；更早的引擎启动时间未单独统计，交付打包另有少量收尾时间 |
 
-## 10. AI 使用与工作流（由用户填写）
+主要取舍：选择串行数据库队列、轮询及本地文件卷，以较低基础设施成本验证完整业务；优先数据归属、持久化和异常边界，暂不扩展题外功能或生产身份系统。
 
-> 本节由用户撰写。已在本次需求整理和文档起草中使用 Codex；完整 AI 使用范围及工作流由用户结合实际开发过程说明，不代写未发生的过程。
+## 12. AI 使用与工作流（由用户填写）
 
-- 使用的 AI 工具及用途：待用户填写。
-- 如何拆解任务和提供上下文：待用户填写。
-- 如何生成/修改代码、审查和验证：待用户填写。
-- 一个具体的问题、验证结果与修正例子：待用户填写。
-- 不提交私人聊天记录、账号、真实凭据或全部提示词。
+本项目已使用 AI 编程工具辅助需求整理和开发。本节按用户要求由用户填写，不代写未确认的个人工作流，也不提交私人聊天记录、账号或全部提示词。
 
-## 11. 复用来源与最终交付检查
+- 使用的工具及用途：待用户填写。
+- 如何拆解任务、提供上下文：待用户填写。
+- 如何生成/修改代码、验证与修正：待用户填写。
+- 一个具体问题的处理例子：待用户填写。
 
-当前前端/后端骨架为手工创建；Maven Wrapper 由 Apache 官方插件生成；模板使用本项目编写的原创 SVG 插画。来源和复用范围见 [docs/ASSETS.md](docs/ASSETS.md)，未将截图中的照片作为可再分发素材。
+## 13. 来源与提交材料
 
-| 内容 | 来源/许可 | 复用范围 | 当前状态 |
-| --- | --- | --- | --- |
-| 框架与测试库 | 官方项目；具体许可随锁定版本核对 | 基础能力 | 已锁定依赖并通过容器检查；最终来源整理待 M7 |
-| 工程骨架 | 手工配置 Next.js / Spring Boot；Apache Maven Wrapper 3.3.4 生成脚本保留原许可头 | 配置、目录及 Wrapper | M0 已验证 |
-| 模板封面 | 本项目原创 SVG；见 docs/ASSETS.md | 六份本地模板封面 | 已提供，接口测试通过；上传样例见 demo-inputs/；结果由 M3 实现 |
+项目骨架为手工配置，未复用完整业务脚手架。Apache Maven Wrapper 3.3.4 生成脚本保留上游许可头；Next/React/Spring/MyBatis 等开源依赖按锁文件/POM 使用。六份 SVG 封面及三份上传示例为项目原创，未复制参考图照片或账户内容，不依赖付费或公司内部服务，详见 [素材来源](docs/ASSETS.md)。
 
-交付前逐项确认：完整源码；前端锁文件与 Maven 版本配置；数据库迁移和种子；仓库内可读取素材；Dockerfile/Compose/非敏感配置示例；CI；真实有效的构建/测试/启动命令；主要 API；成功/失败/耗时/多任务/刷新/身份演示；已知限制及验证结果；实际投入；用户补齐 AI 工作流；来源说明；正式 `README.md`。源码仓库注明验收 commit，压缩包排除 `.env`、凭据、依赖目录、缓存、构建产物与用户上传数据。最终由用户通过收到题目的原沟通渠道提交。
+交付包含前后端源码、npm 锁文件、POM/Wrapper、V1～V4 迁移和种子、本地素材、Dockerfile/Compose、配置示例、CI 与验证说明。源码包排除 `.env`、数据库/上传数据、依赖目录、缓存和构建产物。仓库暂未配置远程地址；接受本地目录或源码压缩包交付，无公网地址要求。最终由用户通过收到题目的沟通渠道提交，AI 工作流章节需用户补齐。
 
-### M0 兼容性补充
-
-当前 ESLint 固定 9.39.5：Next 配套的 React/import/a11y 插件 peer 范围尚不支持 ESLint 10，因此选择可严格解析的 9.x。9.x 已停止上游维护，这是本次工具链的已知维护限制。Boot BOM 解析基线：Spring Framework 6.2.19、Connector/J 9.7.0、Flyway 11.7.2、JUnit Jupiter 5.12.2、Failsafe 3.5.6；实际运行结果见模块验证记录。
-
-Java 镜像版本核对：构建镜像 Temurin 21.0.9+10，运行镜像 Temurin 21.0.12.1+1，均为 Java 21；运行镜像已验证包含健康检查所用 curl。两者镜像均固定 digest。
-
-## 12. 逐模块实施反馈
-
-### M0：工程与版本基线（2026-10-29，北京时间约 20:00～20:30）
-
-- 修改根目录 `README.md`、`EADME.md`、`.env.example`、`.gitignore`、`.gitattributes`、`compose.yaml`，建立正式文档、配置与持久化卷。
-- 创建 `frontend/` 的依赖/锁文件、严格 TypeScript、ESLint、Vitest、最小中文页面、HTTP 请求封装与 4 个边界测试、多阶段镜像。
-- 创建 `backend/` 的 POM、Maven Wrapper/统一仓库配置、Java 入口、system 接口、数据源/Flyway/健康配置、V1 迁移和 MySQL 集成测试、多阶段镜像。
-- 创建 `.github/workflows/ci.yml`：push/pull_request 时使用容器执行前后端检查；线上 CI 尚未执行。
-- 通过：Compose 配置解析；前端 lint/typecheck/4 测试/build；Java verify（1 集成测试，0 失败/错误/跳过）；正式镜像构建；`docker compose up -d --wait`；首页 200；`/api/system` 经 Next.js 转发返回 Java 响应。
-- 运行效果：`http://localhost:3000` 提供最小中文首页，前端、Java 和 MySQL 均 healthy。此时仅为工程基线，不是完整素材制作功能。
-- 取舍与提示：ESLint 9 与当前 Next 插件兼容但已停止维护；Flyway 11.7.2 对 MySQL 8.4 有“新于已测试版本”提示，本次真实迁移/读取测试通过，保留该提示，不宣称上游已认证本版本组合；参见 [上游问题](https://github.com/flyway/flyway/issues/4168)。Mockito 在 Java 21 有动态 agent 提示，当前测试通过，后续测试配置按需处理。
-- 本轮 Agent 会话墙钟时间约 30 分钟，其中包含首次镜像/依赖下载及等待；不能视为用户人工投入。详见 [M0 验证记录](docs/M0-validation.md)。
-### M1：数据与模板浏览（2026-10-29，北京时间约 20:31～20:56）
-
-- 新增 `V2__templates.sql`、`template/` 下 Mapper/Service/Controller/DTO、统一 API 异常响应及 `TemplateIT`；Java 从 MySQL 读取 3 个分类、6 个模板，覆盖 1/2 张图片要求。
-- 新增 `backend/src/main/resources/demo/*.svg` 六份原创本地封面与 `docs/ASSETS.md` 来源说明；封面通过 Java 提供。
-- 更新前端首页、layout、globals.css；新增 Providers/Header/Feedback、模板类型及 `templates/[id]/page.tsx`，支持分类、卡片跳转、详情、要求及加载/空态/错误反馈。
-- 针对本机低可用内存，限制 Next 构建与 Vitest 并发为 2、Node 构建堆为 768 MiB、Rayon 线程为 2；检查和镜像构建串行执行。
-- 通过：前端 lint/typecheck/4 测试/build；Java 3 集成测试；空库连续执行 V1/V2；完整 `docker compose up --build -d --wait`；Java 容器重建后模板仍为 6 条；浏览器分类筛选为 2 张卡片、进入双图详情、404 中文反馈。
-- 运行效果：[本地模板库](http://localhost:3000)。浏览器截图：[M1 模板列表](docs/screenshots/M1-templates.jpg)。上传和任务处理属于后续模块，此时不计作已实现。
-- Agent 会话墙钟时间约 25 分钟，包含代码编写、低内存排查、构建等待与浏览器验证；不等同于人工投入。
-### M2：身份与素材上传（2026-10-29，北京时间 20:56～21:08、21:16～21:24）
-
-- 新增 `V3__identity_and_assets.sql`、`identity/`、`asset/`、`IdentityAssetIT`：演示用户、摘要会话、素材记录、上传校验及授权图片读取。
-- 更新异常处理与 Jackson 配置：缺少 multipart 参数返回 400，拒绝未知 JSON 字段，文件过大 413、类型/内容不符 415。
-- 新增 `session.tsx`、`upload-editor.tsx` 和上传测试；更新 Providers/Header/详情/CSS/类型，实现账户弹窗、身份恢复、动态上传位、预览/替换/移除、取消及旧响应隔离。
-- 新增 `demo-inputs/` 三份 PNG/JPEG 样例及原创生成工具 `tools/GenerateDemoImages.java`，更新 `docs/ASSETS.md`。
-- 通过：Java 6 集成测试；前端 lint/typecheck/6 测试/build；浏览器 Alice 登录、双图 PNG/JPEG 上传、移除/重选、后端预览、Bob 切换清空草稿且访问 Alice 文件被拒、刷新恢复 Alice；Java 重建后原私有图片仍可读取为 640×480。
-- 会话：Cookie 名 `studio_session`，HttpOnly/SameSite=Lax/Path=/，默认 24 小时；数据库保存 SHA-256 摘要。生产 HTTPS 设置 `SESSION_COOKIE_SECURE=true`，演示模式可通过 `DEMO_MODE=false` 禁用登录入口。
-- 上传：`POST /api/assets`，multipart 字段 `file`、`templateId`；返回 `{id,previewUrl,mimeType,sizeBytes}`。真实内容校验 JPEG/PNG、每文件 5 MiB、最多 2400 万像素；不能通过客户端 userId 指定归属。预览接口使用当前会话鉴权。
-- 演示：打开模板，选择 Alice，选择 `demo-inputs/sample-1.png` / `sample-2.png` 或 JPEG；切换 Bob 后草稿清空。未提交草稿不做刷新恢复，已上传文件保留，自动清理不在本次范围内。
-- 截图：[M2 双图上传](docs/screenshots/M2-upload.jpg)。提交按钮、任务、历史在 M3/M4 接入；当前不声称已实现。
-- Agent 有记录的实施时段约 20 分钟，中断等待不计入，非用户人工工时。
-### M3：Java 异步任务链条（2026-10-29，北京时间 21:24～21:43）
-
-- 新增 `V4__tasks.sql`、`task/` 的请求/状态/Mapper/事务服务/流水线/工作器/控制器；修改应用启用调度和单线程配置，结果复制逻辑扩展到 AssetService。
-- 提供 `POST /api/tasks`（校验并建档后 202 + ID + Location）、`GET /api/tasks/{id}`、`GET /api/tasks`；查询不推进流程。状态 QUEUED/RUNNING/SUCCEEDED/FAILED，阶段 ASSET_CHECK/GENERATE/FINALIZE。
-- 每阶段独立记录 task_steps；延迟与文件操作不在长事务中。FINALIZE 结束与结果素材关联、成功状态在同一短事务提交。失败后停止后续步骤，下一任务继续排队执行。
-- 提交幂等唯一键为用户+clientRequestId，稳定指纹检测参数冲突（409）；READ_COMMITTED 保障并发唯一键竞争后的重读能取得既有任务。
-- 启动先将遗留 RUNNING 收敛为 FAILED/PROCESS_INTERRUPTED，再消费 QUEUED；支持重新启动后继续排队任务，不支持从阶段中间续跑。方法级恢复测试已通过，实际强制重启演练留待 M6。
-- 通过：5 个流水线单元测试 + 13 个 MySQL 集成测试；后端构建；完整容器 API 检查脚本，实际观察到三个后台阶段、成功图、三个指定失败、幂等、历史和跨用户拒绝，全部通过。
-- 新增 `tools/verify-api.mjs` 和 Compose `api-check`：`docker compose --profile checks run --rm api-check`。脚本会在 Alice 下创建一条成功和三条失败演示记录，不删除已有数据。会话令牌只在脚本内存使用，不打印、不写入文件。
-- 请求 `simulation.failAtStage` 为 null/ASSET_CHECK/GENERATE/FINALIZE，`simulation.stageDelayMs` 可覆盖各阶段 0～30000 毫秒；DEMO_MODE=false 时拒绝覆盖。默认各 2000 毫秒，配置随任务保存。
-- 模拟结果为首张上传图片的独立持久化副本。个人结果通过 `/api/assets/{id}/content` 鉴权预览，不是浏览器临时 URL。
-- Compose 检查进程增加 Maven 384 MiB / 测试 JVM 512 MiB 和两逻辑 CPU 配置，以降低本机资源压力。更新后全套检查再次通过。
-- 本模块前端未改动，未重复执行未变的前端检查。Agent 会话墙钟约 19 分钟，含验证等待；非用户人工工时。
-
-### M4：前端多任务、历史与恢复（2026-10-29 开发；2026-10-30 最新镜像复核完成）
-
-- 新增 `creation-form.tsx`、`task-board.tsx`、`tasks.ts`、`use-tasks.ts`、`history/page.tsx` 及相关测试与 fixture；更新详情页、Header、Session、HTTP、类型、CSS 和 Vitest 配置。
-- 实现真实提交、受理后继续创建、多任务独立状态、历史与刷新恢复、查询故障保留信息和恢复入口、终态停轮询、切换用户及离开页面时取消请求。
-- 制作页可展开模拟配置，指定三阶段任一步失败及 0～30000 毫秒耗时。结果预览显示后端持久化图片。
-- 容器前端检查通过：lint、typecheck、16 项测试及生产构建。最近日志为 2026-10-29 22:11。后端在本模块没有改动，未将 M3 的 18 项结果写成本次重新执行。
-- 浏览器已验证：连续提交、刷新恢复、前端入口停用期间 Java 继续执行、恢复查询读取终态、结果弹窗和 Escape 焦点恢复、Alice/Bob 历史隔离。
-- 最后补充身份查询 503 保留已知身份、401 清除身份的修复及回归测试；该修复已通过自动化检查，待正式运行镜像复核。M4 仍未提交 Git，暂不勾选模块验收完成。
-- 证据：[M4 验证记录](docs/M4-validation.md)、[处理中截图](docs/screenshots/M4-processing.jpg)、[查询异常截图](docs/screenshots/M4-query-error.jpg)、[历史截图](docs/screenshots/M4-history.jpg)。
-
-### 本次进展汇报与暂停（2026-10-30，北京时间约 11:01 起）
-
-- 按用户要求核对已有代码、Git 提交和检查日志，更新 `README.md`，新增 `docs/M4-validation.md`；本次未修改业务代码。
-- 明确 M0～M3 已完成，M4 实现及自动化检查完成但尚待最终验收，M5～M7 未完成；补记验证批次、当前运行状态、后续任务及投入边界。
-- 当前 Docker 引擎不可连接；本次未启动服务、未重跑测试，不将已有截图当作当前运行状态。
-- 文档更新后停止推进开发，等待用户反馈；AI 工作流章节继续由用户填写。
-
-### 恢复开发与 M4 验收收尾（2026-10-30）
-
-- 用户指示继续后启动 Docker Desktop，构建最新前端正式镜像；`docker compose up -d --wait` 三服务健康检查通过。
-- 最新代码运行复核通过：Cookie 恢复 Alice 身份，历史读取原有 8 条记录，成功结果图片与预览正常。身份 503/401 的细分行为由 M4 自动化测试覆盖。
-- M4 验收完成，后续继续 M5～M7；先前“待复核/暂停”文字保留为历史时点记录，不代表当前状态。
-
-### M5：视觉与基本可用性（2026-10-30）
-
-- 新增 `preview-image.tsx` 及测试，接入模板列表/详情、上传和结果；图片失败显示中文反馈，替换来源可恢复。
-- 更新 `globals.css`：详情封面完整展示、桌面制作区可独立滚动、任务信息文字清晰度及窄屏网格；更新制作成功提示及对应测试。
-- 容器检查：lint/typecheck/17 项前端测试/生产构建通过。浏览器 320/390 像素无横向溢出，键盘完成双图上传与提交，结果/账户弹窗 Escape 与焦点恢复通过。
-- 验证记录：[M5](docs/M5-validation.md)。后续进入 M6 进程中断、持久化及完整回归。
-
-### M6：可靠性与完整回归（2026-10-30）
-
-- 新增 `tools/verify-restart.mjs`，补充 Compose 配置与 `.env.example`，默认仅本机访问、固定 Java 堆上限、映射会话时长与构建期转发地址；忽略运行时 fixture 和交付目录。
-- 扩展 `.github/workflows/ci.yml`：完整容器集成链条及强制重启检查；远程 GitHub 尚未触发。
-- 本地重新执行后端 18 项测试全部通过；真实 API 链条通过。SIGKILL 后处理中任务收敛为失败、排队任务继续、成功结果不变；重建三服务容器后再次验证历史和文件卷持久化通过。
-- 验证记录：[M6](docs/M6-validation.md)。下一步 M7 正式文档、干净环境启动和交付包。
+本地交付包：`delivery/yingzuo-source-20261030.zip`；验收标记：`acceptance-20261030-v1`。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v1` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户补充 AI 工作流或后续修改后，应重新提交并生成新的验收版本与源码包。
