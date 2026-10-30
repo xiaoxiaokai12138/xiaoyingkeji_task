@@ -32,7 +32,7 @@ describe("独立图片上传位", () => {
     const newer: Asset = { id: "new", previewUrl: "/new", mimeType: "image/png", sizeBytes: 1 };
     await act(async () => { second(new Response(JSON.stringify(newer))); });
     await waitFor(() => expect(screen.getByText("✓ 上传完成")).toBeInTheDocument());
-    expect(screen.getByAltText("第 1 张素材预览")).toHaveAttribute("src", "/new");
+    expect(new URL(screen.getByAltText("第 1 张素材预览").getAttribute("src")!, location.origin).pathname).toBe("/new");
     await act(async () => { first(new Response(JSON.stringify({ ...newer, id: "old" }))); });
     expect(onChange).toHaveBeenLastCalledWith([newer]);
     fireEvent.click(screen.getByLabelText("移除第 1 张图片"));

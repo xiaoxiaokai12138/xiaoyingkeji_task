@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { PreviewImage as Image } from "@/components/preview-image";
 import { useQuery } from "@tanstack/react-query";
 import { request, ApiError } from "@/lib/http";
 import type { Template } from "@/lib/types";

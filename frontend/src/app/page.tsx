@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { PreviewImage as Image } from "@/components/preview-image";
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";

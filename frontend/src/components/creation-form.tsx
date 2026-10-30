@@ -37,7 +37,7 @@ export function CreationForm({ template, user }: { template: Template; user: Use
       client.setQueryData<Task[]>(historyKey(user.id), previous => mergeTasks([task],previous));
       void client.invalidateQueries({ queryKey: historyKey(user.id), exact: true });
       pending.current = null;
-      setMessage({ error: false, text: "任务已受理，可在右侧查看进度，也可以继续创建。" });
+      setMessage({ error: false, text: "任务已受理，可在创作记录中查看进度，也可以继续创建。" });
     } catch (error) {
       if (abort.signal.aborted) return;
       setMessage({ error: true, text: error instanceof ApiError ? error.message : "提交请求未能确认，请检查网络后重试。同一次重试不会重复创建任务。" });

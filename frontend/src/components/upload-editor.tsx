@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { PreviewImage as Image } from "./preview-image";
 import { useEffect, useRef, useState } from "react";
 import type { Asset, Template } from "@/lib/types";
 import { request, ApiError } from "@/lib/http";

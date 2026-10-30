@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { PreviewImage as Image } from "./preview-image";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "./session";
 import { Feedback } from "./feedback";
