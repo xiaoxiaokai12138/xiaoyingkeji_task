@@ -8,6 +8,8 @@
 
 ![模板列表](docs/screenshots/M5-desktop.jpg)
 
+
+
 ## 1. 启动项目
 
 需要已启动的 Docker Engine / Docker Desktop（Linux 容器）及 Compose v2。宿主机不需要安装 Node、Java、Maven 或 MySQL。首次构建需要能访问 npm、Maven Central 和基础镜像仓库；已固定依赖版本及镜像 digest。建议给 Docker 至少 4 GiB 可用内存，构建检查串行执行；实际需求受同时运行的其他容器影响。
@@ -307,6 +309,14 @@ Agent 修改了 [session.tsx](frontend/src/components/session.tsx)，并在 [ses
 
 需求取舍和最终对外提交由我确认，Agent 的完成描述需要对应源码、测试或运行证据。断点续跑、后台自动重试等未实现扩展在 README 中明确讨论边界；计划、已编码、已测试和未验证分别说明，不为凑齐功能隐瞒限制。本次说明只概述实际协作过程，不提交私人聊天记录、账号凭据或全部提示词。
 
+### 12.6 消耗统计
+
+耗时：22小时
+
+token消耗：codex plus 额度35%
+
+
+
 ## 13. 来源与提交材料
 
 项目骨架为手工配置，未复用完整业务脚手架。Apache Maven Wrapper 3.3.4 生成脚本保留上游许可头；Next/React/Spring/MyBatis 等开源依赖按锁文件/POM 使用。六份 SVG 封面及三份上传示例为项目原创，未复制参考图照片或账户内容，不依赖付费或公司内部服务，详见 [素材来源](docs/ASSETS.md)。
@@ -314,3 +324,19 @@ Agent 修改了 [session.tsx](frontend/src/components/session.tsx)，并在 [ses
 交付包含前后端源码、npm 锁文件、POM/Wrapper、V1～V4 迁移和种子、本地素材、Dockerfile/Compose、配置示例、CI 与验证说明。源码包排除 `.env`、数据库/上传数据、依赖目录、缓存和构建产物。源码已按用户授权推送至 [GitHub 仓库](https://github.com/xiaoxiaokai12138/xiaoyingkeji_task)，分支为 `master`；没有部署公网网站。最终由用户复核材料，并通过收到题目的沟通渠道提交。
 
 本地交付包：`delivery/yingzuo-source-20261030.zip`；当前验收标记：`acceptance-20261030-v5`。v2 补充远程交付说明，v3 调整文档标注，v4 补充后台自动重试取舍，v5 根据实际会话补齐 AI 工作流；业务源码与已验收的 v1 一致，历史标记保留。完整验收 commit 见 `delivery/ACCEPTANCE.txt`（源码包内也附有该文件），仓库可执行 `git rev-parse acceptance-20261030-v5` 核对。源码包 SHA-256 见 `delivery/SHA256SUMS.txt`。用户复核或后续修改后，应重新提交并生成新的验收版本与源码包。
+
+
+
+# 我的与AI交互的对话在 quanzhan\个人图片 文件夹中！！！
+
+
+
+![模板列表](docs/screenshots/1.png)
+
+![模板列表](docs/screenshots/2.png)
+
+![模板列表](docs/screenshots/3.png)
+
+![模板列表](docs/screenshots/4.png)
+
+![模板列表](docs/screenshots/5.png)
