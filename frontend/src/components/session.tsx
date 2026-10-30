@@ -22,7 +22,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   } });
   const demoUsers = useQuery({ queryKey: ["demo-users"], enabled: open, queryFn: ({ signal }) => request<User[]>("/api/demo-users", { signal }) });
   useEffect(() => { if (open && !dialog.current?.open) dialog.current?.showModal(); if (!open) dialog.current?.close(); }, [open]);
-  const user = busy || session.isError ? null : session.data ?? null;
+  const user = busy ? null : session.data ?? null;
 
   async function change(key: string | null) {
     if (changing.current) return;
